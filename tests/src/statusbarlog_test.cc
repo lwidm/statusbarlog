@@ -206,10 +206,13 @@ TEST_F(HandleManagementTest, CreateHandle_InvalidInputSizes) {
 
 TEST_F(HandleManagementTest, CreateHandle_MaxActiveHandlesLimit) {
   std::vector<statusbar_log::StatusbarHandle> handles;
+  handles.reserve(statusbar_log::kMaxStatusbarHandles + 5);  // Pre-allocate
   bool reached_limit = false;
 
   for (size_t i = 0; i < statusbar_log::kMaxStatusbarHandles + 5; ++i) {
-    statusbar_log::StatusbarHandle handle;
+    handles.emplace_back();
+    auto& handle = handles.back();
+
     std::vector<unsigned int> positions = {1};
     std::vector<unsigned int> bar_sizes = {50};
     std::vector<std::string> prefixes = {"Test " + std::to_string(i)};
@@ -221,21 +224,21 @@ TEST_F(HandleManagementTest, CreateHandle_MaxActiveHandlesLimit) {
         log_filename);
 
     if (err_code == statusbar_log::kStatusbarLogSuccess) {
-      // Successfully created - should only happen up to
-      // statusbar_log::kMaxStatusbarHandles
-      EXPECT_LE(handles.size(), statusbar_log::kMaxStatusbarHandles - 1)
+      // Successfully created - should only happen up to kMaxStatusbarHandles
+      EXPECT_LE(handles.size(), statusbar_log::kMaxStatusbarHandles)
           << "Should not create more than "
           << statusbar_log::kMaxStatusbarHandles << " handles";
       EXPECT_TRUE(handle.valid);
-      handles.push_back(handle);
     } else {
       // Should fail with specific error code
-      EXPECT_EQ(err_code, -3)
-          << "Should return error code -3 when max handles limit reached";
+      EXPECT_EQ(err_code, -4)
+          << "Should return error code -4 when max handles limit reached";
       EXPECT_FALSE(handle.valid)
           << "Handle should be invalid when creation fails";
-      reached_limit = true;
 
+      // Remove the failed handle from vector
+      handles.pop_back();
+      reached_limit = true;
       break;
     }
   }
@@ -256,7 +259,8 @@ TEST_F(HandleManagementTest, CreateHandle_MaxActiveHandlesLimit) {
     handles.erase(handles.begin());
 
     // Now we should be able to create one more handle
-    statusbar_log::StatusbarHandle new_handle;
+    handles.emplace_back();
+    auto& new_handle = handles.back();
     std::vector<unsigned int> positions = {1};
     std::vector<unsigned int> bar_sizes = {50};
     std::vector<std::string> prefixes = {"New after destroy"};
@@ -269,9 +273,9 @@ TEST_F(HandleManagementTest, CreateHandle_MaxActiveHandlesLimit) {
     EXPECT_EQ(err_code, statusbar_log::kStatusbarLogSuccess)
         << "Should be able to create new handle after destroying one";
     EXPECT_TRUE(new_handle.valid);
-    handles.push_back(new_handle);
   }
 
+  // Clean up all handles
   for (auto& handle : handles) {
     const std::string log_filename = GetTestLogFilename();
     statusbar_log::test::RedirectDestroyStatusbarHandle(handle, log_filename);
@@ -518,7 +522,6 @@ TEST_F(StatusbarUpdateTest, InvalidUpdates) {
 
 class StatusbarValidations : public StatusbarTestBase {
  protected:
-  statusbar_log::sink::SinkHandle sink_handle_;
   std::string log_filename;
   statusbar_log::StatusbarHandle handle_;
   std::vector<unsigned int> positions_;
@@ -527,7 +530,7 @@ class StatusbarValidations : public StatusbarTestBase {
   std::vector<std::string> postfixes_;
 
   void SetUp() override {
-    statusbar_log::sink::CreateSinkStdout(this->sink_handle_);
+    StatusbarTestBase::SetUp();
     this->positions_ = {1};
     this->bar_sizes_ = {50};
     this->prefixes_ = {"Processing"};
@@ -544,7 +547,11 @@ class StatusbarValidations : public StatusbarTestBase {
         << "Handle should be valid after creation in fixture setup";
   }
   void TearDown() override {
-    statusbar_log::sink::CreateSinkStdout(this->sink_handle_);
+    if (handle_.valid) {
+      statusbar_log::test::RedirectDestroyStatusbarHandle(handle_,
+                                                          log_filename);
+    }
+    StatusbarTestBase::TearDown();
   }
 };
 

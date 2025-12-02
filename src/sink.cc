@@ -96,7 +96,7 @@ int _ValidateSinkCreation(SinkHandle& sink_handle) {
   const int err = IsValidSinkHandle(sink_handle);
   if (err == kStatusbarLogSuccess) {
     std::cout << "ERROR [" << kFilename << "]: "
-              << "Handle already is valid, cannot use it to create a new sink";
+              << "Handle already is valid, cannot use it to create a new sink\n";
     return -1;
   }
   sink_handle.valid = false;
