@@ -101,8 +101,16 @@ else()
   target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 
   # common warnings for all configs
-  target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic
-                                                 -Wformat)
+  target_compile_options(
+    ${PROJECT_NAME}
+    PRIVATE -Wall
+            -Wextra
+            -Wpedantic
+            -Wformat
+            -Wconversion
+            -Wshadow
+            -Werror
+            -Wuninitialized)
 
   # per-config flags via generator expressions
   target_compile_options(

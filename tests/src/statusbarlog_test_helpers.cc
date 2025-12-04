@@ -16,31 +16,6 @@
 
 // clang-format off
 
-#ifdef _WIN32
-  #include <io.h>       // _open, _close, _dup, _dup2, _read, _fileno, _pipe
-  #include <fcntl.h>    // _O_CREAT, _O_WRONGLY, _O_BINARY
-  #include <sys/stat.h>
-typedef long ssize_t;
-  #define OPEN _open
-  #define CLOSE _close
-  #define DUP _dup
-  #define DUP2 _dup2
-  #define READ _read
-  #define PIPE _pipe
-  #define FILENO _fileno
-  #ifndef S_IRUSR
-    #define S_IRUSR _S_IREAD
-  #endif
-#else
-  #include <unistd.h>
-  #define OPEN open
-  #define CLOSE close
-  #define DUP dup
-  #define DUP2 dup2
-  #define READ read
-  #define PIPE pipe
-  #define FILENO fileno
-#endif
 
 #include <algorithm>
 #include <cstddef>
@@ -51,29 +26,12 @@ typedef long ssize_t;
 #include <regex>
 #include <string>
 
+#include "statusbarlog/os_posix.h"
 #include "statusbarlog/sink.h"
 #include "statusbarlog/statusbarlog.h"
 #include "statusbarlog_test.h"
 
 // clang-format on
-
-static inline int os_open(const char* path, int flags, int mode) {
-  return OPEN(path, flags, mode);
-}
-static inline int os_close(int fd) { return CLOSE(fd); }
-static inline int os_dup(int fd) { return DUP(fd); }
-static inline int os_dup2(int fd, int fd2) { return DUP2(fd, fd2); }
-static inline int os_pipe(int pipefd[2]) {
-#ifdef _WIN32
-  return PIPE(pipefd, 4096, 0);
-#else
-  return PIPE(pipefd);
-#endif
-}
-static inline ssize_t os_read(int fd, void* buf, size_t count) {
-  return READ(fd, buf, (unsigned int)count);
-}
-static inline int os_fileno_stdout() { return FILENO(stdout); }
 
 namespace statusbar_log {
 namespace test {
@@ -122,7 +80,7 @@ int _CaptureStdoutToFile(const std::string& filename) {
   int fd = os_open(filename.c_str(), O_CREAT | O_WRONLY | O_APPEND, 0644);
   if (fd == -1) {
     std::cerr << "CaptureStdoutToFile - Error: open('" << filename
-              << "') failed: " << std::strerror(errno) << "\n";
+              << "') failed: " << GetErrStr() << "\n";
     _is_capturing--;
     return -2;
   }
@@ -130,15 +88,15 @@ int _CaptureStdoutToFile(const std::string& filename) {
   _saved_stdout_fd = os_dup(os_fileno_stdout());
   if (_saved_stdout_fd == -1) {
     std::cerr << "CaptureStdoutToFile - Error: os_dup(os_fileno_stdout()) failed: "
-              << std::strerror(errno) << "\n";
-    close(fd);
+              << GetErrStr() << "\n";
+    os_close(fd);
     _is_capturing--;
     return -3;
   }
 
   if (os_dup2(fd, os_fileno_stdout()) == -1) {
     std::cerr << "CaptureStdoutToFile - Error: os_dup2(fd, os_fileno_stdout()) failed: "
-              << std::strerror(errno) << "\n";
+              << GetErrStr() << "\n";
     os_close(fd);
     os_close(_saved_stdout_fd);
     _saved_stdout_fd = -1;
@@ -171,7 +129,7 @@ int _RestoreCaptureStdout() {
     std::cerr << "RestoreCaptureStdout - Error: os_dup2(_saved_stdout_fd, "
                  "os_fileno_stdout()) "
                  "failed: "
-              << std::strerror(errno) << "\n";
+              << GetErrStr() << "\n";
     os_close(_saved_stdout_fd);
     _saved_stdout_fd = -1;
     _is_capturing--;
@@ -203,7 +161,7 @@ int _CaptureStdoutToPipe() {
 
   if (os_pipe(pipefd) == -1) {
     std::cerr << "_CaptureStdoutToStringStart - Error: os_pipe() failed: "
-              << std::strerror(errno) << "\n";
+              << GetErrStr() << "\n";
     _is_capturing--;
     return -2;
   }
@@ -215,7 +173,7 @@ int _CaptureStdoutToPipe() {
   if (_saved_stdout_fd == -1) {
     std::cerr
         << "_CaptureStdoutToStringStart - Error: os_dup(os_fileno_stdout()) failed: "
-        << std::strerror(errno) << "\n";
+        << GetErrStr() << "\n";
     os_close(_saved_pipe_read_fd);
     _saved_pipe_read_fd = -1;
     os_close(write_fd);
@@ -225,7 +183,7 @@ int _CaptureStdoutToPipe() {
 
   if (os_dup2(write_fd, os_fileno_stdout()) == -1) {
     std::cerr << "CaptureStdoutToFile - Error: os_dup2(fd, os_fileno_stdout()) failed: "
-              << std::strerror(errno) << "\n";
+              << GetErrStr() << "\n";
     os_close(_saved_pipe_read_fd);
     _saved_pipe_read_fd = -1;
     os_close(write_fd);
@@ -259,7 +217,7 @@ int _RestoreCaptureStdoutToStr(std::string& out) {
   if (os_dup2(_saved_stdout_fd, os_fileno_stdout()) == -1) {
     std::cerr << "_RestoreCaptureStdoutToStr - Error: os_dup2(_saved_stdout_fd, "
                  "os_fileno_stdout()) failed: "
-              << std::strerror(errno) << "\n";
+              << GetErrStr() << "\n";
     return -3;
   }
 
@@ -278,7 +236,7 @@ int _RestoreCaptureStdoutToStr(std::string& out) {
   char buffer[kBufSize];
 
   while (true) {
-    ssize_t n = os_read(_saved_pipe_read_fd, buffer, kBufSize);
+    SSIZE_T n = os_read(_saved_pipe_read_fd, buffer, kBufSize);
     if (n > 0) {
       out.append(buffer, static_cast<size_t>(n));
     } else if (n == 0) {
@@ -287,7 +245,7 @@ int _RestoreCaptureStdoutToStr(std::string& out) {
     } else {
       if (errno == EINTR) continue;
       std::cerr << "_RestoreCaptureStdoutToStr - Error: os_read() failed: "
-                << std::strerror(errno) << "\n";
+                << GetErrStr() << "\n";
       os_close(_saved_pipe_read_fd);
       _saved_pipe_read_fd = -1;
       return -4;

@@ -1,21 +1,33 @@
 [
 {
   "directory": "C:/Users/lukas/Documents/statusbarlog/build",
-  "command": "C:\\PROGRA~1\\MICROS~3\\2022\\COMMUN~1\\VC\\Tools\\Llvm\\bin\\CLANG_~1.EXE -DNOMINMAX -IC:/Users/lukas/Documents/statusbarlog/build/include -IC:/Users/lukas/Documents/statusbarlog/include -O3 -DNDEBUG -std=gnu++20 -D_DLL -D_MT -Xclang --dependent-lib=msvcrt -flto=thin -std=c++20 -O3 -ffast-math -o CMakeFiles\\statusbarlog.dir\\src\\statusbarlog.cpp.obj -c C:\\Users\\lukas\\Documents\\statusbarlog\\src\\statusbarlog.cpp",
-  "file": "C:\\Users\\lukas\\Documents\\statusbarlog\\src\\statusbarlog.cpp",
-  "output": "CMakeFiles\\statusbarlog.dir\\src\\statusbarlog.cpp.obj"
+  "command": "C:\\PROGRA~1\\MICROS~3\\2022\\COMMUN~1\\VC\\Tools\\Llvm\\bin\\CLANG_~1.EXE -DNOMINMAX -IC:/Users/lukas/Documents/statusbarlog/build/include -IC:/Users/lukas/Documents/statusbarlog/include -O3 -DNDEBUG -std=gnu++20 -D_DLL -D_MT -Xclang --dependent-lib=msvcrt -Wall -Wextra -Wpedantic -Wformat -Wconversion -Wshadow -Werror -Wuninitialized -O3 -ffast-math -o CMakeFiles\\statusbarlog.dir\\src\\statusbarlog.cc.obj -c C:\\Users\\lukas\\Documents\\statusbarlog\\src\\statusbarlog.cc",
+  "file": "C:\\Users\\lukas\\Documents\\statusbarlog\\src\\statusbarlog.cc",
+  "output": "CMakeFiles\\statusbarlog.dir\\src\\statusbarlog.cc.obj"
 },
 {
   "directory": "C:/Users/lukas/Documents/statusbarlog/build",
-  "command": "C:\\PROGRA~1\\MICROS~3\\2022\\COMMUN~1\\VC\\Tools\\Llvm\\bin\\CLANG_~1.EXE -IC:/Users/lukas/Documents/statusbarlog/build/include -IC:/Users/lukas/Documents/statusbarlog/include -isystem C:/Users/lukas/Documents/statusbarlog/build/_deps/googletest-src/googletest/include -isystem C:/Users/lukas/Documents/statusbarlog/build/_deps/googletest-src/googletest -O3 -DNDEBUG -std=gnu++20 -D_DLL -D_MT -Xclang --dependent-lib=msvcrt -std=c++20 -o tests\\CMakeFiles\\statusbarlog_test.dir\\src\\statusbarlog_test.cpp.obj -c C:\\Users\\lukas\\Documents\\statusbarlog\\tests\\src\\statusbarlog_test.cpp",
-  "file": "C:\\Users\\lukas\\Documents\\statusbarlog\\tests\\src\\statusbarlog_test.cpp",
-  "output": "tests\\CMakeFiles\\statusbarlog_test.dir\\src\\statusbarlog_test.cpp.obj"
+  "command": "C:\\PROGRA~1\\MICROS~3\\2022\\COMMUN~1\\VC\\Tools\\Llvm\\bin\\CLANG_~1.EXE -DNOMINMAX -IC:/Users/lukas/Documents/statusbarlog/build/include -IC:/Users/lukas/Documents/statusbarlog/include -O3 -DNDEBUG -std=gnu++20 -D_DLL -D_MT -Xclang --dependent-lib=msvcrt -Wall -Wextra -Wpedantic -Wformat -Wconversion -Wshadow -Werror -Wuninitialized -O3 -ffast-math -o CMakeFiles\\statusbarlog.dir\\src\\sink.cc.obj -c C:\\Users\\lukas\\Documents\\statusbarlog\\src\\sink.cc",
+  "file": "C:\\Users\\lukas\\Documents\\statusbarlog\\src\\sink.cc",
+  "output": "CMakeFiles\\statusbarlog.dir\\src\\sink.cc.obj"
 },
 {
   "directory": "C:/Users/lukas/Documents/statusbarlog/build",
-  "command": "C:\\PROGRA~1\\MICROS~3\\2022\\COMMUN~1\\VC\\Tools\\Llvm\\bin\\CLANG_~1.EXE -IC:/Users/lukas/Documents/statusbarlog/build/include -IC:/Users/lukas/Documents/statusbarlog/include -O3 -DNDEBUG -std=gnu++20 -D_DLL -D_MT -Xclang --dependent-lib=msvcrt -o tests\\CMakeFiles\\statusbarlog_main.dir\\src\\statusbarlog_main.cpp.obj -c C:\\Users\\lukas\\Documents\\statusbarlog\\tests\\src\\statusbarlog_main.cpp",
-  "file": "C:\\Users\\lukas\\Documents\\statusbarlog\\tests\\src\\statusbarlog_main.cpp",
-  "output": "tests\\CMakeFiles\\statusbarlog_main.dir\\src\\statusbarlog_main.cpp.obj"
+  "command": "C:\\PROGRA~1\\MICROS~3\\2022\\COMMUN~1\\VC\\Tools\\Llvm\\bin\\CLANG_~1.EXE -IC:/Users/lukas/Documents/statusbarlog/tests/../include -IC:/Users/lukas/Documents/statusbarlog/build/tests/../include -IC:/Users/lukas/Documents/statusbarlog/tests/include -IC:/Users/lukas/Documents/statusbarlog/build/include -IC:/Users/lukas/Documents/statusbarlog/include -isystem C:/Users/lukas/Documents/statusbarlog/build/_deps/googletest-src/googletest/include -isystem C:/Users/lukas/Documents/statusbarlog/build/_deps/googletest-src/googletest -O3 -DNDEBUG -std=gnu++20 -D_DLL -D_MT -Xclang --dependent-lib=msvcrt -std=c++20 -o tests\\CMakeFiles\\statusbarlog_test.dir\\src\\statusbarlog_test.cc.obj -c C:\\Users\\lukas\\Documents\\statusbarlog\\tests\\src\\statusbarlog_test.cc",
+  "file": "C:\\Users\\lukas\\Documents\\statusbarlog\\tests\\src\\statusbarlog_test.cc",
+  "output": "tests\\CMakeFiles\\statusbarlog_test.dir\\src\\statusbarlog_test.cc.obj"
+},
+{
+  "directory": "C:/Users/lukas/Documents/statusbarlog/build",
+  "command": "C:\\PROGRA~1\\MICROS~3\\2022\\COMMUN~1\\VC\\Tools\\Llvm\\bin\\CLANG_~1.EXE -IC:/Users/lukas/Documents/statusbarlog/tests/../include -IC:/Users/lukas/Documents/statusbarlog/build/tests/../include -IC:/Users/lukas/Documents/statusbarlog/tests/include -IC:/Users/lukas/Documents/statusbarlog/build/include -IC:/Users/lukas/Documents/statusbarlog/include -isystem C:/Users/lukas/Documents/statusbarlog/build/_deps/googletest-src/googletest/include -isystem C:/Users/lukas/Documents/statusbarlog/build/_deps/googletest-src/googletest -O3 -DNDEBUG -std=gnu++20 -D_DLL -D_MT -Xclang --dependent-lib=msvcrt -std=c++20 -o tests\\CMakeFiles\\statusbarlog_test.dir\\src\\statusbarlog_test_helpers.cc.obj -c C:\\Users\\lukas\\Documents\\statusbarlog\\tests\\src\\statusbarlog_test_helpers.cc",
+  "file": "C:\\Users\\lukas\\Documents\\statusbarlog\\tests\\src\\statusbarlog_test_helpers.cc",
+  "output": "tests\\CMakeFiles\\statusbarlog_test.dir\\src\\statusbarlog_test_helpers.cc.obj"
+},
+{
+  "directory": "C:/Users/lukas/Documents/statusbarlog/build",
+  "command": "C:\\PROGRA~1\\MICROS~3\\2022\\COMMUN~1\\VC\\Tools\\Llvm\\bin\\CLANG_~1.EXE -IC:/Users/lukas/Documents/statusbarlog/tests/../include -IC:/Users/lukas/Documents/statusbarlog/build/tests/../include -IC:/Users/lukas/Documents/statusbarlog/build/include -IC:/Users/lukas/Documents/statusbarlog/include -O3 -DNDEBUG -std=gnu++20 -D_DLL -D_MT -Xclang --dependent-lib=msvcrt -o tests\\CMakeFiles\\statusbarlog_main.dir\\src\\statusbarlog_main.cc.obj -c C:\\Users\\lukas\\Documents\\statusbarlog\\tests\\src\\statusbarlog_main.cc",
+  "file": "C:\\Users\\lukas\\Documents\\statusbarlog\\tests\\src\\statusbarlog_main.cc",
+  "output": "tests\\CMakeFiles\\statusbarlog_main.dir\\src\\statusbarlog_main.cc.obj"
 },
 {
   "directory": "C:/Users/lukas/Documents/statusbarlog/build",

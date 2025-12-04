@@ -20,6 +20,8 @@
 #include <mutex>
 #include <string>
 
+#include "statusbarlog/os_posix.h"
+
 namespace statusbar_log {
 namespace sink {
 
@@ -191,14 +193,14 @@ int DestroySinkHandle(SinkHandle& sink_handle);
 /**
  * \brief Write len bytes (returns number of bytes written or -1 on error).
  */
-ssize_t SinkWrite(const SinkHandle& sink_handle, const char* buf,
+SSIZE_T SinkWrite(const SinkHandle& sink_handle, const char* buf,
                   std::size_t len);
 
 /**
  * Convenience to write a NUL-terminated string (returns 0 on success, -1 on
  * error).
  */
-ssize_t SinkWriteStr(const SinkHandle& sink_handle, const std::string& str);
+SSIZE_T SinkWriteStr(const SinkHandle& sink_handle, const std::string& str);
 
 /**
  * \brief Flush a sink using its handle

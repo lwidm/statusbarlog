@@ -18,12 +18,6 @@
 
 #include "statusbarlog/sink.h"
 
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <unistd.h>
-#endif
-
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -36,6 +30,7 @@
 #include <string>
 #include <vector>
 
+#include "statusbarlog/os_posix.h"
 #include "statusbarlog/statusbarlog.h"
 
 // clang-format on
@@ -231,7 +226,7 @@ int CreateSinkStdout(SinkHandle& sink_handle) {
     _sink_registry[sink_handle.idx]->owned_file.reset();
     _sink_registry[sink_handle.idx]->path.clear();
     _sink_registry[sink_handle.idx]->type = kSinkStdout;
-    _sink_registry[sink_handle.idx]->fd = fileno(stdout);
+    _sink_registry[sink_handle.idx]->fd = os_fileno_stdout();
     _sink_registry[sink_handle.idx]->id = _sink_handle_id_count;
   } else {
     std::unique_ptr<Sink> new_sink = std::make_unique<Sink>();
@@ -240,7 +235,7 @@ int CreateSinkStdout(SinkHandle& sink_handle) {
     new_sink->owned_file.reset();
     new_sink->path.clear();
     new_sink->type = kSinkStdout;
-    new_sink->fd = fileno(stdout);
+    new_sink->fd = os_fileno_stdout();
     new_sink->id = _sink_handle_id_count;
     _sink_registry.push_back(std::move(new_sink));
   }
@@ -328,9 +323,9 @@ int CreateSinkOstream(SinkHandle& sink_handle, std::ostream& os) {
 
   int fd;
   if (&os == &std::cout) {
-    fd = fileno(stdout);
+    fd = os_fileno_stdout();
   } else if (&os == &std::cerr) {
-    fd = fileno(stderr);
+    fd = os_fileno_stderr();
   } else {
     fd = -1;
   }
@@ -363,7 +358,7 @@ int CreateSinkOstream(SinkHandle& sink_handle, std::ostream& os) {
   return kStatusbarLogSuccess;
 }
 
-ssize_t SinkWrite(const SinkHandle& sink_handle, const char* buf,
+SSIZE_T SinkWrite(const SinkHandle& sink_handle, const char* buf,
                   std::size_t len) {
   std::lock_guard<std::mutex> lx(_sink_registry_mutex);
   if (!buf) return -1;
@@ -380,7 +375,7 @@ ssize_t SinkWrite(const SinkHandle& sink_handle, const char* buf,
 #if defined(SSIZE_MAX)
     if (len > static_cast<std::size_t>(SSIZE_MAX)) return -2;
 #endif
-    ssize_t rc = ::write(sink->fd, buf, static_cast<size_t>(len));
+    SSIZE_T rc = os_write(sink->fd, buf, static_cast<size_t>(len));
     return rc;
   }
 
@@ -402,10 +397,10 @@ ssize_t SinkWrite(const SinkHandle& sink_handle, const char* buf,
     return -7;
   }
 
-  return static_cast<ssize_t>(written);
+  return static_cast<SSIZE_T>(written);
 }
 
-ssize_t SinkWriteStr(const SinkHandle& sink_handle, const std::string& str) {
+SSIZE_T SinkWriteStr(const SinkHandle& sink_handle, const std::string& str) {
   return SinkWrite(sink_handle, str.c_str(), str.size());
 }
 
@@ -457,13 +452,13 @@ bool SinkIsTty(const SinkHandle& sink_handle) {
   if (!sink) return false;
 
   if (sink->fd >= 0) {
-    return ::isatty(sink->fd) != 0;
+    return os_isatty(sink->fd) != 0;
   }
   if (sink->out == &std::cout) {
-    return ::isatty(fileno(stdout));
+    return os_isatty(os_fileno_stdout());
   }
   if (sink->out == &std::cerr) {
-    return ::isatty(fileno(stderr));
+    return os_isatty(os_fileno_stderr());
   }
 
   return false;
@@ -525,7 +520,7 @@ int MoveCursorUp(const SinkHandle& sink_handle, int move) {
     } else {
       seq.assign(static_cast<size_t>(-move), '\n');  // move down -> newlines
     }
-    ssize_t rc = ::write(s->fd, seq.data(), seq.size());
+    ssize_t rc = os_write(s->fd, seq.data(), seq.size());
     return (rc < 0) ? -7 : kStatusbarLogSuccess;
   }
 
@@ -563,7 +558,7 @@ int MoveCursorUp(const SinkHandle& sink_handle, int move) {
       }
       return kStatusbarLogSuccess;
     } else {
-      std::string buf(-move, '\n');
+      std::string buf(static_cast<unsigned int>(-move), '\n');
       SinkWriteStr(sink_handle, buf);
     }
   }
@@ -576,10 +571,10 @@ int MoveCursorUp(const SinkHandle& sink_handle, int move) {
     } else {
       seq.assign(static_cast<size_t>(-move), '\n');  // move down -> newlines
     }
-    ssize_t rc = ::write(s->fd, seq.data(), seq.size());
+    SSIZE_T rc = os_write(s->fd, seq.data(), seq.size());
     return (rc < 0) ? -7 : kStatusbarLogSuccess;
   } else {
-    std::string buf(-move, '\n');
+    std::string buf(static_cast<unsigned int>(-move), '\n');
     SinkWriteStr(sink_handle, buf);
   }
   return kStatusbarLogSuccess;

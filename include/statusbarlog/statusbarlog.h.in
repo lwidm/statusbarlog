@@ -190,8 +190,9 @@ inline int Log(LogLevel log_level, const std::string& filename,
                sink::SinkHandle sink_handle, const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  return LogV(log_level, filename, sink_handle, fmt, args);
+  const int err =  LogV(log_level, filename, sink_handle, fmt, args);
   va_end(args);
+  return err;
 }
 
 /**
@@ -203,8 +204,9 @@ inline int LogErr(const std::string& filename, sink::SinkHandle sink_handle,
                   const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  return LogV(kLogLevelErr, filename, sink_handle, fmt, args);
+  const int err = LogV(kLogLevelErr, filename, sink_handle, fmt, args);
   va_end(args);
+  return err;
 }
 
 /**
@@ -216,8 +218,9 @@ inline int LogWrn(const std::string& filename, sink::SinkHandle sink_handle,
                   const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  return LogV(kLogLevelWrn, filename, sink_handle, fmt, args);
+  const int err =  LogV(kLogLevelWrn, filename, sink_handle, fmt, args);
   va_end(args);
+  return err;
 }
 
 /**
@@ -229,8 +232,9 @@ inline int LogInf(const std::string& filename, sink::SinkHandle sink_handle,
                   const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  return LogV(kLogLevelInf, filename, sink_handle, fmt, args);
+  const int err =  LogV(kLogLevelInf, filename, sink_handle, fmt, args);
   va_end(args);
+  return err;
 }
 
 /**
@@ -242,8 +246,9 @@ inline int LogDbg(const std::string& filename, sink::SinkHandle sink_handle,
                   const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  return LogV(kLogLevelDbg, filename, sink_handle, fmt, args);
+  const int err =  LogV(kLogLevelDbg, filename, sink_handle, fmt, args);
   va_end(args);
+  return err;
 }
 
 /**
