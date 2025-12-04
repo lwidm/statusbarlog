@@ -17,16 +17,14 @@
 #ifndef STATUSBARLOG_OS_POSIX_H_
 #define STATUSBARLOG_OS_POSIX_H_
 
-#include <basetsd.h>
 #include <cstdio>
 
+#include <fcntl.h>
 
 #ifdef _WIN32
   #include <io.h>       // _open, _close, _dup, _dup2, _read, _fileno, _pipe, _isatty
-  #include <fcntl.h>    // _O_CREAT, _O_WRONGLY, _O_BINARY
   #include <sys/stat.h>
   #include <BaseTsd.h>
-typedef SSIZE_T ssize_t;
   #define STATUSBARLOG_OPEN _open
   #define STATUSBARLOG_CLOSE _close
   #define STATUSBARLOG_DUP _dup
@@ -53,11 +51,14 @@ typedef SSIZE_T ssize_t;
 #endif
 
 #include <string>
+#include <cstring>
 
 namespace statusbar_log {
 
 #ifdef _WIN32
-typedef SSIZE_T ssize_t;
+typedef ssize_t SSIZE_T;
+#else
+typedef ssize_t SSIZE_T;
 #endif
 
 #ifdef _WIN32
@@ -77,7 +78,7 @@ static inline int os_pipe(int pipefd[2]) {
 #ifdef _WIN32
   return STATUSBARLOG_PIPE(pipefd, 4096, 0);
 #else
-  return PIPE(pipefd);
+  return STATUSBARLOG_PIPE(pipefd);
 #endif
 }
 static inline SSIZE_T os_read(int fd, void* buf, size_t count) {
@@ -91,7 +92,7 @@ static inline SSIZE_T os_write(int fd, const void* buf, size_t count) {
 #ifdef _WIN32
     return STATUSBARLOG_WRITE(fd, (const char*)buf, (unsigned int)count);
 #else
-    return WRITE(fd, buf, count);
+    return STATUSBARLOG_WRITE(fd, buf, count);
 #endif
 }
 
