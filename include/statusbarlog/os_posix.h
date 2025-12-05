@@ -56,7 +56,7 @@
 namespace statusbar_log {
 
 #ifdef _WIN32
-typedef ssize_t SSIZE_T;
+typedef long SSIZE_T;
 #else
 typedef ssize_t SSIZE_T;
 #endif

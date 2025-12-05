@@ -520,7 +520,7 @@ int MoveCursorUp(const SinkHandle& sink_handle, int move) {
     } else {
       seq.assign(static_cast<size_t>(-move), '\n');  // move down -> newlines
     }
-    ssize_t rc = os_write(s->fd, seq.data(), seq.size());
+    SSIZE_T rc = os_write(s->fd, seq.data(), seq.size());
     return (rc < 0) ? -7 : kStatusbarLogSuccess;
   }
 

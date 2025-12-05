@@ -687,7 +687,7 @@ TEST_F(LogTest, LogFormatStringTest) {
 
   statusbar_log::test::RedirectToStrLog(
       capture_stdout, this->sink_handle_, statusbar_log::kLogLevelInf,
-      kFilename, "size_t: %zu, ssize_t: %zd", (size_t)42, (ssize_t)-5);
+      kFilename, "size_t: %zu, ssize_t: %zd", (size_t)42, (SSIZE_T)-5);
 
   EXPECT_STREQ(capture_stdout.c_str(),
                "INFO [statusbarlog_test.cc]: "
