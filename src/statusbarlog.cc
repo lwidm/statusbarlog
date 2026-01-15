@@ -354,8 +354,7 @@ int _DrawStatusbarComponent(const sink::SinkHandle& sink_handle,
   char spin_char = spinner[spinner_idx];
 
   const unsigned int fill = static_cast<unsigned int>(
-      std::floor((percent * static_cast<double>(bar_width)) / 100.0)
-  );
+      std::floor((percent * static_cast<double>(bar_width)) / 100.0));
   const unsigned int empty = bar_width - fill;
 
   std::ostringstream oss;
@@ -447,17 +446,15 @@ int LogV(const LogLevel log_level, const std::string& filename,
   if (log_level > kLogLevel) return kStatusbarLogSuccess;
   std::mutex* write_mutex_ptr = nullptr;
   int err = sink::get_mutex_ptr(sink_handle, write_mutex_ptr);
+
+  sink::SinkType sink_type;
+  err = sink::get_sink_type(sink_handle, sink_type);
   if (err != kStatusbarLogSuccess) return err;
 
   std::unique_lock<std::mutex> write_lock(*write_mutex_ptr, std::defer_lock);
   std::unique_lock<std::mutex> registry_lock(_statusbar_registry_mutex,
                                              std::defer_lock);
   std::lock(write_lock, registry_lock);
-
-  const bool statusbars_active = !_statusbar_registry.empty();
-  // sink::SinkType sink_type;
-  // err = sink::GetSinkType(sink_handle, sink_type);
-  // if (err != kStatusbarLogSuccess) return err;
 
   const char* prefix = "";
   // clang-format off
@@ -470,22 +467,30 @@ int LogV(const LogLevel log_level, const std::string& filename,
   }
   // clang-format on
 
+  std::vector<std::size_t> relevant_statusbar_idxs = {};
+  for (std::size_t i = 0; i < _statusbar_registry.size(); ++i) {
+    if (_statusbar_registry[i].id == 0) continue;
+    sink::SinkType statusbar_sink_type;
+    err = sink::get_sink_type_silent(_statusbar_registry[i].sink_handle,
+                                     statusbar_sink_type);
+    if (err != kStatusbarLogSuccess) continue;
+    if (statusbar_sink_type != sink_type) continue;
+    relevant_statusbar_idxs.push_back(i);
+  }
+
   int move = 0;
-  if (statusbars_active) {
-    for (std::size_t i = 0; i < _statusbar_registry.size(); ++i) {
-      for (std::size_t j = 0; j < _statusbar_registry[i].positions.size();
-           ++j) {
-        int current_pos = static_cast<int>(_statusbar_registry[i].positions[j]);
-        if (current_pos > move) {
-          move = current_pos;
-        }
+  for (std::size_t i : relevant_statusbar_idxs) {
+    for (std::size_t j = 0; j < _statusbar_registry[i].positions.size(); ++j) {
+      int current_pos = static_cast<int>(_statusbar_registry[i].positions[j]);
+      if (current_pos > move) {
+        move = current_pos;
       }
     }
   }
 
   va_list args_copy;
   sink::MoveCursorUp(sink_handle, move);
-  if (statusbars_active) printf("\r\033[2K\r");
+  if (!relevant_statusbar_idxs.empty()) printf("\r\033[2K\r");
   va_copy(args_copy, args);
   int size = std::vsnprintf(nullptr, 0, fmt, args_copy);
   va_end(args_copy);
@@ -514,64 +519,60 @@ int LogV(const LogLevel log_level, const std::string& filename,
   _ConditionalFlush(sink_handle);
   sink::MoveCursorUp(sink_handle, -move);
 
-  if (statusbars_active) {
-    for (std::size_t i = 0; i < _statusbar_registry.size(); ++i) {
-      for (std::size_t j = 0; j < _statusbar_registry[i].positions.size();
-           ++j) {
-        int bar_err_code = _DrawStatusbarComponent(
-            sink_handle, write_lock, _statusbar_registry[i].percentages[j],
-            _statusbar_registry[i].bar_sizes[j],
-            _statusbar_registry[i].prefixes[j],
-            _statusbar_registry[i].postfixes[j],
-            _statusbar_registry[i].spin_idxs[j],
-            static_cast<int>(_statusbar_registry[i].positions[j]));
-        if ((bar_err_code != kStatusbarLogSuccess) &&
-            !_statusbar_registry[i].error_reported) {
-          std::string why;
-          bool is_critical_error = false;
-          switch (bar_err_code) {
-            case -1:
-              is_critical_error = true;
-              why = "Terminal width detection failed (Windows)";
-              break;
-            case -2:
-              is_critical_error = true;
-              why = "Terminal width detection failed (Linux)";
-              break;
-            case -3:
-              is_critical_error = false;
-              why = "Truncantion was needed (bar exeeds terminal width)";
-              break;
-            case -4:
-              is_critical_error = true;
-              why =
-                  "Both terminal width detection failed (Window) AND "
-                  "truncation";
-              break;
-            case -5:
-              is_critical_error = true;
-              why =
-                  "Both terminal width detection failed (Linux) AND truncation";
-              break;
-            case -6:
-              is_critical_error = true;
-              why = "Invalid percentage given";
-              break;
-            default:
-              is_critical_error = true;
-              why = "Unknown _DrawStatusbarComponent error!";
-              break;
-          }
-          if (is_critical_error) {
-            _statusbar_registry[i].error_reported = true;
-            write_lock.unlock();
-            registry_lock.unlock();
-            printf(
-                "ERROR [statusbarlog.cc]: LogV(...) failed updating "
-                "statusbar: %s on statusbar with ID %zu at bar idx %zu",
-                why.c_str(), i, j);
-            return bar_err_code - 5;
-          }
+  for (std::size_t i : relevant_statusbar_idxs) {
+    for (std::size_t j = 0; j < _statusbar_registry[i].positions.size(); ++j) {
+      int bar_err_code = _DrawStatusbarComponent(
+          sink_handle, write_lock, _statusbar_registry[i].percentages[j],
+          _statusbar_registry[i].bar_sizes[j],
+          _statusbar_registry[i].prefixes[j],
+          _statusbar_registry[i].postfixes[j],
+          _statusbar_registry[i].spin_idxs[j],
+          static_cast<int>(_statusbar_registry[i].positions[j]));
+      if ((bar_err_code != kStatusbarLogSuccess) &&
+          !_statusbar_registry[i].error_reported) {
+        std::string why;
+        bool is_critical_error = false;
+        switch (bar_err_code) {
+          case -1:
+            is_critical_error = true;
+            why = "Terminal width detection failed (Windows)";
+            break;
+          case -2:
+            is_critical_error = true;
+            why = "Terminal width detection failed (Linux)";
+            break;
+          case -3:
+            is_critical_error = false;
+            why = "Truncantion was needed (bar exeeds terminal width)";
+            break;
+          case -4:
+            is_critical_error = true;
+            why =
+                "Both terminal width detection failed (Window) AND "
+                "truncation";
+            break;
+          case -5:
+            is_critical_error = true;
+            why = "Both terminal width detection failed (Linux) AND truncation";
+            break;
+          case -6:
+            is_critical_error = true;
+            why = "Invalid percentage given";
+            break;
+          default:
+            is_critical_error = true;
+            why = "Unknown _DrawStatusbarComponent error!";
+            break;
+        }
+        if (is_critical_error) {
+          _statusbar_registry[i].error_reported = true;
+          write_lock.unlock();
+          registry_lock.unlock();
+          printf(
+              "ERROR [statusbarlog.cc]: LogV(...) failed updating "
+              "statusbar: %s on statusbar with ID %zu at bar idx %zu",
+              why.c_str(), i, j);
+          return bar_err_code - 5;
         }
       }
     }
@@ -714,7 +715,8 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
         _statusbar_registry[statusbar_handle.idx].prefixes[idx],
         _statusbar_registry[statusbar_handle.idx].postfixes[idx],
         _statusbar_registry[statusbar_handle.idx].spin_idxs[idx],
-        static_cast<int>(_statusbar_registry[statusbar_handle.idx].positions[idx]));
+        static_cast<int>(
+            _statusbar_registry[statusbar_handle.idx].positions[idx]));
   }
   return kStatusbarLogSuccess;
 }

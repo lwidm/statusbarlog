@@ -490,6 +490,14 @@ int get_sink_type(const SinkHandle& sink_handle, SinkType& sink_type) {
   return kStatusbarLogSuccess;
 }
 
+int get_sink_type_silent(const SinkHandle& sink_handle, SinkType& sink_type) {
+  int err = IsValidSinkHandle(sink_handle);
+  if (err != kStatusbarLogSuccess) return err;
+  std::lock_guard<std::mutex> lx(_sink_registry_mutex);
+  sink_type = _sink_registry[sink_handle.idx]->type;
+  return kStatusbarLogSuccess;
+}
+
 int FlushSinkHandle(const SinkHandle& sink_handle) {
   int err = IsValidSinkHandleVerbose(sink_handle);
   if (err != kStatusbarLogSuccess) return err;
