@@ -73,8 +73,6 @@ int body_statusbar(const statusbar_log::sink::SinkHandle& sink_handle,
 }
 
 int main_body(const statusbar_log::sink::SinkHandle& sink_handle) {
-  PrintWithCleanup(sink_handle);
-
   statusbar_log::LogInf(kFilename, sink_handle, "Starting test...");
   statusbar_log::LogInf(kFilename, sink_handle, "Starting test...");
   statusbar_log::LogInf(kFilename, sink_handle, "Starting test...");
@@ -116,15 +114,28 @@ int main_body(const statusbar_log::sink::SinkHandle& sink_handle) {
 }
 
 int main() {
-  std::cout << "\n ========== Starting main test program ==========\n" << std::endl;
+  std::cout << "\n ========== Starting main test program ==========\n"
+            << std::endl;
   statusbar_log::sink::SinkHandle sink_handle;
   statusbar_log::sink::CreateSinkStdout(sink_handle);
+  PrintWithCleanup(sink_handle);
 
   int err = main_body(sink_handle);
 
   std::cout.flush();
   std::fflush(stdout);
   statusbar_log::sink::DestroySinkHandle(sink_handle);
-  std::cout << "\n ========== Done with main test program ==========\n" << std::endl;
+
+  statusbar_log::sink::SinkHandle sink_file_handle;
+  statusbar_log::sink::CreateSinkFile(
+      sink_handle, "/home/lukas/Documents/statusbarlog/build/main_test.txt");
+
+  err = main_body(sink_handle);
+
+  std::cout.flush();
+  std::fflush(stdout);
+  statusbar_log::sink::DestroySinkHandle(sink_handle);
+  std::cout << "\n ========== Done with main test program ==========\n"
+            << std::endl;
   return err;
 }
