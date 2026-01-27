@@ -346,7 +346,8 @@ int get_sink_type_silent(const SinkHandle& sink_handle, SinkType& sink_type);
  * - If the sink has a valid file descriptor (fd >= 0) writes directly to that
  *   fd.
  * - If the sink wraps std::cout or std::cerr, writes to fileno(stdout|stderr).
- * - If the sink is an arbitrary ostream (file or wrapped ostream), the
+ * - If the sink is a file sink (kSinkFileOwned), returns an error (not
+ *   supported).
  *
  * \param[in] sink_handle Sink handle struct of which to get the type.
  * \param[in] move number of lines to move up (positive value) or down (negative
@@ -367,7 +368,7 @@ int get_sink_type_silent(const SinkHandle& sink_handle, SinkType& sink_type);
  *         - -5: Failed: Invalid handle (Errorcode not handled)
  *         - -6: Failed: Could not obtain sink pointer from registry.
  *         - -7: Failed: Failed to write to fd-backed sink.
- *         - -8: Failed: Failed to open file (trying to move up).
+ *         - -8: Failed: MoveCursorUp not supported for file sinks.
  */
 int MoveCursorUp(const SinkHandle& sink_handle, int move);
 

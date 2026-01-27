@@ -408,6 +408,69 @@ int _DrawStatusbarComponent(const sink::SinkHandle& sink_handle,
   return err;
 }
 
+/**
+ * \brief Write "prefix ...\n" to a file sink when a statusbar starts.
+ *
+ * For file sinks, statusbars are not drawn. Instead, the prefix of the
+ * topmost bar (index 0) is written with " ...\n" appended.
+ *
+ * \param[in] sink_handle Sink handle to write to (must be a file sink).
+ * \param[in] statusbar The statusbar whose topmost prefix to write.
+ *
+ * \return Returns statusbar_log::kStatusbarLogSuccess (i.e. 0) on success, or
+ * one of these error codes:
+ *         - -1 to -4: Invalid sink handle (forwarded from get_sink_type_silent)
+ *         - -5: Statusbar has no bars.
+ *         - -6: Sink is not a file sink.
+ *         - -7: Sink write failed.
+ */
+int _WriteFileStatusbarPrefix(const sink::SinkHandle& sink_handle,
+                              const Statusbar& statusbar) {
+  if (statusbar.prefixes.empty()) return -5;
+
+  sink::SinkType sink_type;
+  int err = sink::get_sink_type_silent(sink_handle, sink_type);
+  if (err != kStatusbarLogSuccess) return err;
+  if (sink_type != sink::kSinkFileOwned) return -6;
+
+  SSIZE_T written =
+      sink::SinkWriteStr(sink_handle, statusbar.prefixes[0] + " ...\n");
+  if (written <= 0) return -7;
+
+  _ConditionalFlush(sink_handle);
+  return kStatusbarLogSuccess;
+}
+
+/**
+ * \brief Write "prefix Done!\n" to a file sink when a statusbar completes.
+ *
+ * \param[in] sink_handle Sink handle to write to (must be a file sink).
+ * \param[in] statusbar The statusbar whose topmost prefix to use.
+ *
+ * \return Returns statusbar_log::kStatusbarLogSuccess (i.e. 0) on success, or
+ * one of these error codes:
+ *         - -1 to -4: Invalid sink handle (forwarded from get_sink_type_silent)
+ *         - -5: Statusbar has no bars.
+ *         - -6: Sink is not a file sink.
+ *         - -7: Sink write failed.
+ */
+int _WriteFileStatusbarDone(const sink::SinkHandle& sink_handle,
+                            const Statusbar& statusbar) {
+  if (statusbar.prefixes.empty()) return -5;
+
+  sink::SinkType sink_type;
+  int err = sink::get_sink_type_silent(sink_handle, sink_type);
+  if (err != kStatusbarLogSuccess) return err;
+  if (sink_type != sink::kSinkFileOwned) return -6;
+
+  SSIZE_T written =
+      sink::SinkWriteStr(sink_handle, statusbar.prefixes[0] + " Done!\n");
+  if (written <= 0) return -7;
+
+  _ConditionalFlush(sink_handle);
+  return kStatusbarLogSuccess;
+}
+
 }  // namespace
 
 void SaveCursorPosition(sink::SinkHandle sink_handle) {
@@ -489,8 +552,6 @@ int LogV(const LogLevel log_level, const std::string& filename,
   }
 
   va_list args_copy;
-  sink::MoveCursorUp(sink_handle, move);
-  if (!relevant_statusbar_idxs.empty()) printf("\r\033[2K\r");
   va_copy(args_copy, args);
   int size = std::vsnprintf(nullptr, 0, fmt, args_copy);
   va_end(args_copy);
@@ -509,10 +570,27 @@ int LogV(const LogLevel log_level, const std::string& filename,
 
   std::string formatted_message =
       std::string(prefix) + " [" + sanitized_filename + "]: " + message + "\n";
+
+  if (sink_type == sink::kSinkFileOwned) {
+    SSIZE_T written = sink::SinkWriteStr(sink_handle, formatted_message);
+    if (written <= 0) {
+      std::cout << "ERROR [" << kFilename << "]: "
+                << "Sink Write Failed in LogV!\n";
+      return -6;
+    }
+    _ConditionalFlush(sink_handle);
+    write_lock.unlock();
+    registry_lock.unlock();
+    return kStatusbarLogSuccess;
+  }
+
+  sink::MoveCursorUp(sink_handle, move);
+  if (!relevant_statusbar_idxs.empty()) printf("\r\033[2K\r");
+
   SSIZE_T written = sink::SinkWriteStr(sink_handle, formatted_message);
   if (written <= 0) {
     std::cout << "ERROR [" << kFilename << "]: "
-              << "Sink Write Failed in _DrawStatusbarComponent!\n";
+              << "Sink Write Failed in LogV!\n";
     return -6;
   }
 
@@ -708,15 +786,23 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
 
   statusbar_handle.id = _statusbar_handle_id_count;
   statusbar_handle.valid = true;
-  for (std::size_t idx = 0; idx < num_bars; idx++) {
-    _DrawStatusbarComponent(
-        sink_handle, write_lock, 0.0,
-        _statusbar_registry[statusbar_handle.idx].bar_sizes[idx],
-        _statusbar_registry[statusbar_handle.idx].prefixes[idx],
-        _statusbar_registry[statusbar_handle.idx].postfixes[idx],
-        _statusbar_registry[statusbar_handle.idx].spin_idxs[idx],
-        static_cast<int>(
-            _statusbar_registry[statusbar_handle.idx].positions[idx]));
+
+  sink::SinkType sink_type;
+  sink::get_sink_type_silent(sink_handle, sink_type);
+  if (sink_type == sink::kSinkFileOwned) {
+    _WriteFileStatusbarPrefix(sink_handle,
+                              _statusbar_registry[statusbar_handle.idx]);
+  } else {
+    for (std::size_t idx = 0; idx < num_bars; idx++) {
+      _DrawStatusbarComponent(
+          sink_handle, write_lock, 0.0,
+          _statusbar_registry[statusbar_handle.idx].bar_sizes[idx],
+          _statusbar_registry[statusbar_handle.idx].prefixes[idx],
+          _statusbar_registry[statusbar_handle.idx].postfixes[idx],
+          _statusbar_registry[statusbar_handle.idx].spin_idxs[idx],
+          static_cast<int>(
+              _statusbar_registry[statusbar_handle.idx].positions[idx]));
+    }
   }
   return kStatusbarLogSuccess;
 }
@@ -760,10 +846,16 @@ int DestroyStatusbarHandle(StatusbarHandle& statusbar_handle) {
 
   Statusbar& target = _statusbar_registry[statusbar_handle.idx];
 
-  for (std::size_t i = 0; i < target.positions.size(); i++) {
-    sink::MoveCursorUp(sink_handle, static_cast<int>(target.positions[i]));
-    ClearCurrentLine(sink_handle);
-    sink::MoveCursorUp(sink_handle, -static_cast<int>(target.positions[i]));
+  sink::SinkType sink_type;
+  sink::get_sink_type_silent(sink_handle, sink_type);
+  if (sink_type == sink::kSinkFileOwned) {
+    _WriteFileStatusbarDone(sink_handle, target);
+  } else {
+    for (std::size_t i = 0; i < target.positions.size(); i++) {
+      sink::MoveCursorUp(sink_handle, static_cast<int>(target.positions[i]));
+      ClearCurrentLine(sink_handle);
+      sink::MoveCursorUp(sink_handle, -static_cast<int>(target.positions[i]));
+    }
   }
   sink::FlushSinkHandle(sink_handle);
 
@@ -806,6 +898,13 @@ int UpdateStatusbar(StatusbarHandle& statusbar_handle, const std::size_t idx,
               << err << "\n";
     return -1;
   }
+
+  sink::SinkType sink_type;
+  err = sink::get_sink_type_silent(sink_handle, sink_type);
+  if (err == kStatusbarLogSuccess && sink_type == sink::kSinkFileOwned) {
+    return kStatusbarLogSuccess;
+  }
+
   std::mutex* write_mutex_ptr;
   err = sink::get_mutex_ptr(sink_handle, write_mutex_ptr);
   if (err != kStatusbarLogSuccess) {

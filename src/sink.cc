@@ -20,7 +20,6 @@
 
 #include <cstdio>
 #include <cstring>
-#include <filesystem>
 #include <ios>
 #include <fstream>
 #include <iostream>
@@ -533,68 +532,11 @@ int MoveCursorUp(const SinkHandle& sink_handle, int move) {
   }
 
   // Case 2: sink owns a file (CreateSinkFile -> kSinkFileOwned).
+  // MoveCursorUp is not supported for file sinks.
   if (s->type == kSinkFileOwned) {
-    if (move > 0) {
-      std::ofstream* file = s->owned_file.get();
-      (*file).flush();
-      (*file).close();  // Close before truncating
-
-      std::ifstream in(s->path, std::ios::binary);
-      if (!in) return -8;
-
-      in.seekg(0, std::ios::end);
-      std::streamoff pos = in.tellg();
-      if (pos <= 0) {
-        return kStatusbarLogSuccess;
-      }
-
-      // Skip trailing newline if present (to start from last line's content)
-      if (pos > 0) {
-        in.seekg(pos - 1);
-        char c;
-        in.get(c);
-        if (c == '\n') {
-          --pos;
-        }
-      }
-
-      int lines_to_remove = move;
-      while (pos > 0 && lines_to_remove > 0) {
-        --pos;
-        in.seekg(pos);
-        char c;
-        in.get(c);
-        if (!in) break;
-        if (c == '\n') {
-          --lines_to_remove;
-          if (lines_to_remove == 0) {
-            // We found the newline ending the line BEFORE what we want to remove
-            // Truncate right after this newline
-            ++pos;
-            break;
-          }
-        }
-      }
-      in.close();
-
-      try {
-        std::filesystem::resize_file(
-            s->path, (pos > 0) ? static_cast<std::uintmax_t>(pos) : 0);
-      } catch (const std::exception&) {
-        return -9;
-      }
-
-      // Reopen file in append mode for future writes
-      (*file).open(s->path, std::ios::app);
-      if (!(*file).is_open() || !(*file).good()) {
-        return -10;
-      }
-
-      return kStatusbarLogSuccess;
-    } else {
-      std::string buf(static_cast<unsigned int>(-move), '\n');
-      SinkWriteStr(sink_handle, buf);
-    }
+    std::cout << "ERROR [" << kFilename
+              << "]: MoveCursorUp called on a file sink (not supported)\n";
+    return -8;
   }
 
   // Case 3: wrapped ostream (kSinkOstreamWrapped or other non-fd)
