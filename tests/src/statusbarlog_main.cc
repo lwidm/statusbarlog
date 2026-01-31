@@ -128,13 +128,13 @@ int main() {
 
   statusbar_log::sink::SinkHandle sink_file_handle;
   statusbar_log::sink::CreateSinkFile(
-      sink_handle, "/home/lukas/Documents/statusbarlog/build/main_test.txt");
+      sink_file_handle, "/home/lukas/Documents/statusbarlog/build/main_test.txt");
 
-  err = main_body(sink_handle);
+  err = main_body(sink_file_handle);
 
   std::cout.flush();
   std::fflush(stdout);
-  statusbar_log::sink::DestroySinkHandle(sink_handle);
+  statusbar_log::sink::DestroySinkHandle(sink_file_handle);
   std::cout << "\n ========== Done with main test program ==========\n"
             << std::endl;
   return err;

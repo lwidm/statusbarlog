@@ -310,6 +310,10 @@ int get_mutex_ptr(const SinkHandle& sink_handle, std::mutex*& sink_mutex_ptr);
  */
 int get_sink_type(const SinkHandle& sink_handle, SinkType& sink_type);
 
+int SinkTellP(const SinkHandle& sink_handle, std::streampos* streampos);
+
+int SinkSeekP(const SinkHandle& sink_handle, const std::streampos& streampos);
+
 /**
  * \brief Get the sink type associated to the sink handle.
  *

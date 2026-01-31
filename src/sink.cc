@@ -265,7 +265,7 @@ int CreateSinkFile(SinkHandle& sink_handle, const std::string path) {
 
   std::unique_ptr<std::ofstream> f;
   try {
-    f = std::make_unique<std::ofstream>(path, std::ios::app);
+    f = std::make_unique<std::ofstream>(path, std::ios::out | std::ios::trunc);
     if (!f->is_open() || !f->good()) {
       return -3;
     }
@@ -494,6 +494,24 @@ int get_sink_type_silent(const SinkHandle& sink_handle, SinkType& sink_type) {
   if (err != kStatusbarLogSuccess) return err;
   std::lock_guard<std::mutex> lx(_sink_registry_mutex);
   sink_type = _sink_registry[sink_handle.idx]->type;
+  return kStatusbarLogSuccess;
+}
+
+int SinkTellP(const SinkHandle& sink_handle, std::streampos* streampos){
+  int err = IsValidSinkHandle(sink_handle);
+  if (err != kStatusbarLogSuccess) return err;
+  SinkType sink_type = _sink_registry[sink_handle.idx]->type;
+  if (sink_type != kSinkFileOwned) return -5;
+  *streampos = _sink_registry[sink_handle.idx]->owned_file->tellp();
+  return kStatusbarLogSuccess;
+}
+
+int SinkSeekP(const SinkHandle& sink_handle, const std::streampos& streampos){
+  int err = IsValidSinkHandle(sink_handle);
+  if (err != kStatusbarLogSuccess) return err;
+  SinkType sink_type = _sink_registry[sink_handle.idx]->type;
+  if (sink_type != kSinkFileOwned) return -5;
+  _sink_registry[sink_handle.idx]->owned_file->seekp(streampos);
   return kStatusbarLogSuccess;
 }
 
