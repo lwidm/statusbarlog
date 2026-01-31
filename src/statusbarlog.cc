@@ -579,20 +579,6 @@ int LogV(const LogLevel log_level, const std::string& filename,
     relevant_statusbar_idxs.push_back(i);
   }
 
-  int move = 0;
-  for (std::size_t i : relevant_statusbar_idxs) {
-    for (std::size_t j = 0; j < _statusbar_registry[i].positions.size(); ++j) {
-      int current_pos = static_cast<int>(_statusbar_registry[i].positions[j]);
-      if (current_pos > move) {
-        move = current_pos;
-      }
-    }
-  }
-  std::size_t n_bars = _GetNBarsInSink(relevant_statusbar_idxs);
-  std::vector<std::array<std::size_t, 2>> component_map =
-      _GetStatusbarComponentIndexMap(relevant_statusbar_idxs, n_bars);
-  _SortStatusbarComponentMap(component_map);
-
   va_list args_copy;
   va_copy(args_copy, args);
   int size = std::vsnprintf(nullptr, 0, fmt, args_copy);
@@ -613,31 +599,57 @@ int LogV(const LogLevel log_level, const std::string& filename,
   std::string formatted_message =
       std::string(prefix) + " [" + sanitized_filename + "]: " + message + "\n";
 
-  if (sink_type == sink::kSinkFileOwned && !component_map.empty()) {
-    sink::SinkSeekP(sink_handle,
-                    _statusbar_registry[component_map[0][0]]
-                        .line_start_positions[component_map[0][1]]);
-  } else if (sink_type != sink::kSinkFileOwned) {
+  if (sink_type == sink::kSinkFileOwned) {
+    std::size_t n_bars = _GetNBarsInSink(relevant_statusbar_idxs);
+    std::vector<std::array<std::size_t, 2>> component_map =
+        _GetStatusbarComponentIndexMap(relevant_statusbar_idxs, n_bars);
+    _SortStatusbarComponentMap(component_map);
+
+    if (!component_map.empty()) {
+      sink::SinkSeekP(sink_handle,
+                      _statusbar_registry[component_map[0][0]]
+                          .line_start_positions[component_map[0][1]]);
+    }
+
+    SSIZE_T written = sink::SinkWriteStr(sink_handle, formatted_message);
+    if (written <= 0) {
+      std::cout << "ERROR [" << kFilename << "]: "
+                << "Sink Write Failed in LogV (owned file sink)!\n";
+      return -6;
+    }
+    _ConditionalFlush(sink_handle);
+
+    if (!component_map.empty()) {
+      sink::SinkTellP(sink_handle,
+                      &_statusbar_registry[component_map[0][0]]
+                           .line_start_positions[component_map[0][1]]);
+      _DrawStatusbarsOwnedFile(sink_handle, write_lock, component_map);
+    }
+  } else {
+    int move = 0;
+    for (std::size_t i : relevant_statusbar_idxs) {
+      for (std::size_t j = 0; j < _statusbar_registry[i].positions.size();
+           ++j) {
+        int current_pos =
+            static_cast<int>(_statusbar_registry[i].positions[j]);
+        if (current_pos > move) {
+          move = current_pos;
+        }
+      }
+    }
+
     sink::MoveCursorUp(sink_handle, move);
     if (!relevant_statusbar_idxs.empty()) printf("\r\033[2K\r");
-  }
 
-  SSIZE_T written = sink::SinkWriteStr(sink_handle, formatted_message);
-  if (written <= 0) {
-    std::cout << "ERROR [" << kFilename << "]: "
-              << "Sink Write Failed in LogV!\n";
-    return -6;
-  }
+    SSIZE_T written = sink::SinkWriteStr(sink_handle, formatted_message);
+    if (written <= 0) {
+      std::cout << "ERROR [" << kFilename << "]: "
+                << "Sink Write Failed in LogV!\n";
+      return -6;
+    }
+    _ConditionalFlush(sink_handle);
 
-  _ConditionalFlush(sink_handle);
-  if (sink_type == sink::kSinkFileOwned && !component_map.empty()) {
-    sink::SinkTellP(sink_handle,
-                    &_statusbar_registry[component_map[0][0]]
-                         .line_start_positions[component_map[0][1]]);
-    _DrawStatusbarsOwnedFile(sink_handle, write_lock, component_map);
-  } else if (sink_type != sink::kSinkFileOwned) {
     sink::MoveCursorUp(sink_handle, -move);
-
     for (std::size_t i : relevant_statusbar_idxs) {
       for (std::size_t j = 0; j < _statusbar_registry[i].positions.size();
            ++j) {
@@ -810,8 +822,9 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
   sink::SinkType sink_type;
   sink::get_sink_type_silent(sink_handle, sink_type);
 
-  std::vector<std::streampos> line_start_positions(num_bars);
+  std::vector<std::streampos> line_start_positions;
   if (sink_type == sink::kSinkFileOwned) {
+    line_start_positions.resize(num_bars);
     for (auto& start_position : line_start_positions) {
       sink::SinkTellP(sink_handle, &start_position);
     }
@@ -921,9 +934,8 @@ int DestroyStatusbarHandle(StatusbarHandle& statusbar_handle) {
 
   sink::SinkType sink_type;
   sink::get_sink_type_silent(sink_handle, sink_type);
-  if (sink_type == sink::kSinkFileOwned) {
-  } else {
-    // TODO : does it actually make sense to clear
+  // TODO : does it actually make sense to clear
+  if (sink_type != sink::kSinkFileOwned) {
     for (std::size_t i = 0; i < target.positions.size(); i++) {
       sink::MoveCursorUp(sink_handle, static_cast<int>(target.positions[i]));
       ClearCurrentLine(sink_handle);
