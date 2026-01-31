@@ -129,11 +129,12 @@ int IsValidSinkHandleVerbose(const SinkHandle& sink_handle);
 int CreateSinkStdout(SinkHandle& sink_handle);
 
 /**
- * \brief Initialises a sink that opens/owns the given file path (append mode)
+ * \brief Initialises a sink that opens/owns the given file path.
  *
  * This function takes an empty SinkHandle struct and creates an associated sink
- * that opens/owns a file path (takes owvernship). It opens the file in append
- * mode.
+ * that opens/owns a file path (takes ownership). The file is opened with
+ * std::ios::out | std::ios::trunc, which truncates any existing content and
+ * allows seekable writes (required for in-place statusbar updates).
  *
  * \param[out] sink_handle Struct to initialize.
  * \param[in] path Path to the file to be opened/created.
@@ -310,8 +311,48 @@ int get_mutex_ptr(const SinkHandle& sink_handle, std::mutex*& sink_mutex_ptr);
  */
 int get_sink_type(const SinkHandle& sink_handle, SinkType& sink_type);
 
+/**
+ * \brief Get the current put-pointer position of a file sink.
+ *
+ * Retrieves the current write position (tellp) of the owned file stream
+ * associated with the sink. Only valid for file sinks (kSinkFileOwned).
+ *
+ * \param[in] sink_handle Sink handle to query.
+ * \param[out] streampos Receives the current write position.
+ *
+ * \return Returns statusbar_log::kStatusbarLogSuccess (i.e. 0) on success, or
+ * one of these status codes:
+ *         -  statusbar_log::kStatusbarLogSuccess (i.e. 0): Success
+ *         - -1: Invalid handle (valid flag set to false)
+ *         - -2: Invalid handle (index out of bounds)
+ *         - -3: Invalid handle (IDs don't match)
+ *         - -4: Invalid handle (ID is 0)
+ *         - -5: Sink is not a file sink (kSinkFileOwned)
+ *
+ * \see SinkSeekP: Set the put-pointer position.
+ */
 int SinkTellP(const SinkHandle& sink_handle, std::streampos* streampos);
 
+/**
+ * \brief Set the put-pointer position of a file sink.
+ *
+ * Moves the write position (seekp) of the owned file stream associated with
+ * the sink. Only valid for file sinks (kSinkFileOwned).
+ *
+ * \param[in] sink_handle Sink handle to modify.
+ * \param[in] streampos The target write position to seek to.
+ *
+ * \return Returns statusbar_log::kStatusbarLogSuccess (i.e. 0) on success, or
+ * one of these status codes:
+ *         -  statusbar_log::kStatusbarLogSuccess (i.e. 0): Success
+ *         - -1: Invalid handle (valid flag set to false)
+ *         - -2: Invalid handle (index out of bounds)
+ *         - -3: Invalid handle (IDs don't match)
+ *         - -4: Invalid handle (ID is 0)
+ *         - -5: Sink is not a file sink (kSinkFileOwned)
+ *
+ * \see SinkTellP: Get the current put-pointer position.
+ */
 int SinkSeekP(const SinkHandle& sink_handle, const std::streampos& streampos);
 
 /**

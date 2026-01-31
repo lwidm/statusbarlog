@@ -72,7 +72,7 @@ namespace {
 // clang-format off
 typedef struct {
   sink::SinkHandle sink_handle;         ///< The sink in which to print the statusbar (for e.g. stdout).
-  std::vector<std::streampos> line_start_positions;
+  std::vector<std::streampos> line_start_positions; ///< File write positions for each bar line (file sinks only).
   std::vector<double> percentages;      ///< Progress percentages (0-100) for each bar.
   std::vector<unsigned int> positions;  ///< Vertical positions (1=topmost).
   std::vector<unsigned int> bar_sizes;  ///< Total width (characters) of each bar.
@@ -290,6 +290,31 @@ int _IsValidStatusbarHandleVerbose(const StatusbarHandle& statusbar_handle,
   return kStatusbarLogSuccess;
 }
 
+/**
+ * \brief Builds the formatted string for a single statusbar component.
+ *
+ * Generates a string of the form: prefix[####/    ]  50.00postfix
+ * Truncates to terminal width if the sink is a TTY.
+ *
+ * \param[out] status_str Receives the formatted bar string.
+ * \param[in] sink_handle Sink handle (used to check if TTY for truncation).
+ * \param[in] write_lock Unique lock of the sink (must be locked).
+ * \param[in] percent Progress percentage (0-100).
+ * \param[in] bar_width Width of the bar in characters.
+ * \param[in] prefix Text before the bar.
+ * \param[in] postfix Text after the bar.
+ * \param[in, out] spinner_idx Spinner animation index (wrapped to 0-3).
+ *
+ * \return Returns statusbar_log::kStatusbarLogSuccess (i.e. 0) on success, or
+ * one of these error/warning codes:
+ *         -  statusbar_log::kStatusbarLogSuccess (i.e. 0): Success (no errors)
+ *         - -1: Terminal width detection failed (Windows)
+ *         - -2: Terminal width detection failed (Linux)
+ *         - -3: Truncation was needed (bar exceeds terminal width)
+ *         - -4: Terminal width detection failed (Windows) AND truncation needed
+ *         - -5: Terminal width detection failed (Linux) AND truncation needed
+ *         - -7: write_lock not owned
+ */
 int _StatusbarComponentString(
     std::string& status_str, const sink::SinkHandle& sink_handle,
     std::unique_lock<std::mutex>& write_lock, const double percent,
@@ -428,7 +453,15 @@ int _DrawStatusbarComponent(const sink::SinkHandle& sink_handle,
   return err;
 }
 
-std::size_t _GetNBarsInSink(
+/**
+ * \brief Counts the total number of bar components across the given statusbars.
+ *
+ * \param[in] relevant_statusbar_idxs Indices into _statusbar_registry.
+ *
+ * \return Total number of bar components (sum of positions.size() for each
+ * statusbar).
+ */
+std::size_t _CountBarComponents(
     const std::vector<std::size_t>& relevant_statusbar_idxs) {
   std::size_t n_bars = 0;
   for (std::size_t i : relevant_statusbar_idxs) {
@@ -439,6 +472,18 @@ std::size_t _GetNBarsInSink(
   return n_bars;
 }
 
+/**
+ * \brief Builds a flat map of {statusbar_index, bar_index} pairs for all bar
+ * components across the given statusbars.
+ *
+ * Each entry maps to a single bar component in _statusbar_registry. The
+ * returned vector has n_bars elements.
+ *
+ * \param[in] relevant_statusbar_idxs Indices into _statusbar_registry.
+ * \param[in] n_bars Total number of bar components (from _CountBarComponents).
+ *
+ * \return Vector of {statusbar_index, bar_index} pairs.
+ */
 std::vector<std::array<std::size_t, 2>> _GetStatusbarComponentIndexMap(
     const std::vector<std::size_t>& relevant_statusbar_idxs,
     std::size_t n_bars) {
@@ -453,6 +498,12 @@ std::vector<std::array<std::size_t, 2>> _GetStatusbarComponentIndexMap(
   return component_map;
 }
 
+/**
+ * \brief Sorts a component map by position in descending order (highest
+ * position first).
+ *
+ * \param[in, out] component_map The component map to sort in place.
+ */
 void _SortStatusbarComponentMap(
     std::vector<std::array<std::size_t, 2>>& component_map) {
   std::sort(
@@ -463,6 +514,23 @@ void _SortStatusbarComponentMap(
       });
 }
 
+/**
+ * \brief Redraws all statusbar components in place for a file sink.
+ *
+ * Seeks to the first bar's recorded line position and rewrites each bar
+ * line sequentially, updating line_start_positions via tellp as it goes.
+ *
+ * \param[in] sink_handle File sink handle to write to.
+ * \param[in] write_lock Unique lock of the sink (must be locked).
+ * \param[in] sorted_relevant_component_map Sorted component map (highest
+ * position first) of {statusbar_index, bar_index} pairs.
+ *
+ * \return Returns statusbar_log::kStatusbarLogSuccess (i.e. 0) on success, or
+ * one of these error/warning codes:
+ *         -  statusbar_log::kStatusbarLogSuccess (i.e. 0): Success (no errors)
+ *         - -7: write_lock not owned
+ *         - -8: Sink write failed
+ */
 int _DrawStatusbarsOwnedFile(const sink::SinkHandle& sink_handle,
                              std::unique_lock<std::mutex>& write_lock,
                              const std::vector<std::array<std::size_t, 2>>&
@@ -600,7 +668,7 @@ int LogV(const LogLevel log_level, const std::string& filename,
       std::string(prefix) + " [" + sanitized_filename + "]: " + message + "\n";
 
   if (sink_type == sink::kSinkFileOwned) {
-    std::size_t n_bars = _GetNBarsInSink(relevant_statusbar_idxs);
+    std::size_t n_bars = _CountBarComponents(relevant_statusbar_idxs);
     std::vector<std::array<std::size_t, 2>> component_map =
         _GetStatusbarComponentIndexMap(relevant_statusbar_idxs, n_bars);
     _SortStatusbarComponentMap(component_map);
@@ -866,7 +934,7 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
       relevant_statusbar_idxs.push_back(i);
     }
 
-    std::size_t n_bars_in_sink = _GetNBarsInSink(relevant_statusbar_idxs);
+    std::size_t n_bars_in_sink = _CountBarComponents(relevant_statusbar_idxs);
     std::vector<std::array<std::size_t, 2>> component_map =
         _GetStatusbarComponentIndexMap(relevant_statusbar_idxs, n_bars_in_sink);
     _SortStatusbarComponentMap(component_map);
@@ -1046,7 +1114,7 @@ int UpdateStatusbar(StatusbarHandle& statusbar_handle, const std::size_t idx,
       relevant_statusbar_idxs.push_back(i);
     }
 
-    std::size_t n_bars_in_sink = _GetNBarsInSink(relevant_statusbar_idxs);
+    std::size_t n_bars_in_sink = _CountBarComponents(relevant_statusbar_idxs);
     std::vector<std::array<std::size_t, 2>> component_map =
         _GetStatusbarComponentIndexMap(relevant_statusbar_idxs, n_bars_in_sink);
     _SortStatusbarComponentMap(component_map);
