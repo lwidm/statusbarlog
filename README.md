@@ -51,7 +51,7 @@ For online documentation hosted via GitHub Pages, see the project's [GitHub Page
 
 #### All Platforms:
 - C++20 capable compiler (Clang, GCC, or MSVC)
-- CMake >= 3.20@subsubsection prereq_all_platforms All Platforms:
+- CMake >= 3.20
 
 For Doxygen documentation:
 - doxygen
@@ -115,9 +115,7 @@ cmake --build . -j$(nproc) --config Release
 ### Adding statusbarlog to your project
 The recommended approach to use this library is to include it in your project through a git submodule. However, directely using source files or precompiled libraries and header files from the [github releases page](https://github.com/lwidm/statusbarlog/releases) is also an option.
 
-See [cmake submodule page](@ref cmake_module_page) for detailed instructions on how to inlcude statusbarlog in your project.
-
-@subsection build_linux Building on Linux/macOS
+See [cmake submodule page](@ref cmake_module_page) for detailed instructions on how to include statusbarlog in your project.
 
 ### Building on Windows
 

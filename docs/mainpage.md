@@ -19,57 +19,65 @@ Example code snippet (from `docs/example/main.cc`):
 
 @include docs/example/main.cc
 
-@subsection brief Brief explenation
+@subsection brief Brief explanation
 
-1. **Set compile-time log level (optional)**  
-   The log level is set by CMake when generating the header. This ensure only log messages with higher or equal log priority (ERROR, WARNING, INFO, DEBUG) to the log level will be printed.
+1. **Set compile-time log level (optional)**
+   The log level is set by CMake when generating the header. This ensures only log messages with higher or equal log priority (ERROR, WARNING, INFO, DEBUG) to the log level will be printed.
    Override via:
    ```sh
    cmake -DSTATUSBARLOG_LOG_LEVEL=kLogLevelWrn ...
    ```
    (all options: `kLogLevelDbg`, `kLogLevelInf`, `kLogLevelWrn`, `kLogLevelErr`, `kLogLevelOff`)
 
-2. **Define filename for every cpp file in which you want to log** 
+2. **Create a sink** (stdout or file)
+   ```cpp
+   statusbar_log::sink::SinkHandle sink_handle;
+   statusbar_log::sink::CreateSinkStdout(sink_handle);
+   // Or for a file sink:
+   // statusbar_log::sink::CreateSinkFile(sink_handle, "output.txt");
+   ```
+
+3. **Define filename for every cpp file in which you want to log**
    ```cpp
    const std::string kFilename = "StatusbarLog_main.cc";
    ```
 
-3. **Now a simple log message can be done like:**
+4. **Now a simple log message can be done like:**
    ```cpp
-   statusbarlog::LogDbg(kFilename, "Funny debug message");
-   statusbarlog::LogInf(kFilename, "Starting test...");
-   statusbarlog::LogWrn(kFilename, "Couldn't obtain viscosity. Using 1.6e-5 m^2/s");
-   statusbarlog::LogErr(kFilename, "Failed to compute rhs");
+   statusbar_log::LogDbg(kFilename, sink_handle, "Funny debug message");
+   statusbar_log::LogInf(kFilename, sink_handle, "Starting test...");
+   statusbar_log::LogWrn(kFilename, sink_handle, "Couldn't obtain viscosity. Using 1.6e-5 m^2/s");
+   statusbar_log::LogErr(kFilename, sink_handle, "Failed to compute rhs");
    ```
 
-4. **Create a stacked statusbar** (here: two statusbars ontop of each other)
+5. **Create a stacked statusbar** (here: two statusbars on top of each other)
    ```cpp
-   statusbarlog::StatusbarHandle handle;
-   std::vector<unsigned int> positions = {2, 1};
-   std::vector<unsigned int> bar_sizes = {20, 10};
-   std::vector<std::string> prefixes = {"first", "second"};
-   std::vector<std::string> postfixes = {"20 long", "10 long"};
-
-   int err_code = statusbarlog::CreateStatusbarHandle(
-       handle, positions, bar_sizes, prefixes, postfixes);
+   statusbar_log::StatusbarHandle handle;
+   int err_code = statusbar_log::CreateStatusbarHandle(
+       handle, sink_handle,
+       {2, 1},                    // positions
+       {20, 10},                  // bar widths
+       {"first", "second"},       // prefixes
+       {"20 long", "10 long"});   // postfixes
    ```
 
-5. **Updating a statusbar**
+6. **Updating a statusbar**
    ```cpp
-   statusbarlog::UpdateStatusbar(handle, 0, percent);  // top bar
-   statusbarlog::UpdateStatusbar(handle, 1, percent);  // lower bar
+   statusbar_log::UpdateStatusbar(handle, 0, percent);  // top bar
+   statusbar_log::UpdateStatusbar(handle, 1, percent);  // lower bar
    ```
    Note: For printing the statusbar the first time just use the percentage 0.
 
-6. **Log while updating**
+7. **Log while updating**
    ```cpp
-   statusbarlog::LogInf(kFilename, "10 ticks reached");
+   statusbar_log::LogInf(kFilename, sink_handle, "10 ticks reached");
    ```
-   The log messages now nicely display above the statusbar.
+   The log messages are printed above any active statusbars.
 
-7. **Cleanup**
+8. **Cleanup**
    ```cpp
-   int err_code = statusbarlog::DestroyStatusbarHandle(handle);
+   statusbar_log::DestroyStatusbarHandle(handle);
+   statusbar_log::sink::DestroySinkHandle(sink_handle);
    ```
 
 @section building Building
@@ -171,17 +179,34 @@ Then open the generated `.sln` in Visual Studio
 
 @subsection cmake_options Important CMake Options
 
-| Option | Type | Default | Description |
-|--------|------|----------|--------------|
-| `CMAKE_BUILD_TYPE` | STRING | `Release` | Standard CMake build type |
-| `STATUSBARLOG_INSTALL` | BOOL | `OFF` | Generate installation targets |
-| `STATUSBARLOG_BUILD_TESTS` | BOOL | `OFF` | Build test suite |
-| `STATUSBARLOG_BUILD_TEST_MAIN` | BOOL | `OFF` | Build test main executable |
-| `STATUSBARLOG_LOG_LEVEL` | STRING | `kLogLevelDbg` | Compile-time log level (`kLogLevelOff`, `kLogLevelErr`, `kLogLevelWrn`, `kLogLevelInf`, `kLogLevelDbg`) |
+| Option | Type | Default | Values | Description |
+|--------|------|---------|--------|-------------|
+| `CMAKE_BUILD_TYPE` | STRING | `Release` | `Debug`, `Release`, `RelWithDebInfo`, `MinSizeRel` | Standard CMake build type |
+| `STATUSBARLOG_INSTALL` | BOOL | `OFF` | `ON`, `OFF` | Generate installation targets |
+| `STATUSBARLOG_BUILD_TESTS` | BOOL | `OFF` | `ON`, `OFF` | Build test suite (uses GoogleTest) |
+| `STATUSBARLOG_BUILD_TEST_MAIN` | BOOL | `OFF` | `ON`, `OFF` | Build test main executable |
+| `STATUSBARLOG_LOG_LEVEL` | STRING | `kLogLevelDbg` | See below | Compile-time log level threshold |
 
-Example usage:
+**`STATUSBARLOG_LOG_LEVEL` values** (from most to least restrictive):
+
+| Value | Description |
+|-------|-------------|
+| `kLogLevelOff` | No logging at all |
+| `kLogLevelErr` | Only errors |
+| `kLogLevelWrn` | Errors and warnings |
+| `kLogLevelInf` | Errors, warnings, and informational messages |
+| `kLogLevelDbg` (default) | All messages including debug |
+
+Messages with a level strictly above the configured threshold are discarded at compile time.
+
+Example usage (release):
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSTATUSBARLOG_LOG_LEVEL=kLogLevelDbg
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSTATUSBARLOG_LOG_LEVEL=kLogLevelInf
+```
+
+Example usage (development):
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DSTATUSBARLOG_LOG_LEVEL=kLogLevelDbg -DSTATUSBARLOG_BUILD_TESTS=On -DSTATUSBARLOG_BUILD_TEST_MAIN=On
 ```
 
 Or when consuming via `add_subdirectory()`:
@@ -191,9 +216,9 @@ add_subdirectory(path/to/statusbarlog)
 ```
 
 @subsection performance_notes_windows Performance Notes for Windows
-- Use Ninja generator for fastest build times
-- MSVC compiler with */O2* and *LTO* provides best runtime performance
-- Consider *Profile-Guided Optimization (PGO)* for maximum performance in release builds
+- Use Ninja generator for fastest build times (actually ..., almost certainly irrelevant)
+- MSVC compiler with */O2* and *LTO* provides best runtime performance (actually ..., almost certainly irrelevant)
+- Consider *Profile-Guided Optimization (PGO)* for maximum performance in release builds (actually ..., almost certainly irrelevant)
 
 @section generating_docs Generating Documentation
 
