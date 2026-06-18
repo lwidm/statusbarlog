@@ -7,6 +7,7 @@ StatusbarLog is a C++ utility for simultaneous logging and multiple stacked stat
 
 ## Quick Links
 - [Features](#features)
+- [Positions, groups and layout](#positions-groups-and-layout)
 - [Documentation](#documentation)
 - [Building](#building)
   - [Prerequisites](#prerequisites)
@@ -33,6 +34,31 @@ StatusbarLog is a C++ utility for simultaneous logging and multiple stacked stat
 - Spinner animation for "busy" statusbars
 - Cursor manipulation so log messages and statusbars do not overwrite each other
 - Cross-platform design goals
+
+## Positions, groups and layout
+
+A "statusbar handle" is really a _group_ of one or more bars that occupy a
+contiguous block of lines and are created, updated, and destroyed together. The
+`positions` you pass to `CreateStatusbarHandle` are relative ranks within that
+group (larger = higher up), *not* absolute screen rows. StatusbarLog computes
+the absolute rows itself, so two groups can never collide.
+
+This means there are two distinct ways to show several bars, and they mean
+different things:
+
+- **One handle with several bars** (e.g. positions `{2, 1}`): a single logical
+  group. The bars always stay adjacent, share one lifetime (one
+  `CreateStatusbarHandle` / `DestroyStatusbarHandle`), and are addressed by index
+  when you call `UpdateStatusbar`. Use this for bars that belong together — e.g.
+  the outer and inner progress of one task.
+- **Several separate handles**: independent groups. The library stacks them (most
+  recently created nearest the cursor) without overlap, and each can be created
+  and destroyed on its own. Use this for unrelated progress indicators with
+  independent lifetimes.
+
+For the precise rules (how positions are ranked, how groups stack, and when the
+display is repainted versus reflowed) see the **Positions, Groups & Layout**
+page in the [full documentation](https://lwidm.github.io/statusbarlog).
 
 ## Documentation
 
