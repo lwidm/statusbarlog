@@ -61,25 +61,25 @@ namespace {
  *
  * A status bar can contain multiple stacked bars, each with:
  * - Progress percentages (0-100) for each bar.
- * - Vertical positions (1=topmost).
+ * - Relative positional rank within this group (larger = higher).
  * - Total width (characters) of each bar.
  * - Text displayed before each bar.
  * - Text displayed after each bar.
  * - Spinner animation indices.
- * - Indicator whether error already has been reported
  * - unique id corresponding to the handle
+ * - Indicator whether error already has been reported
  */
 // clang-format off
 typedef struct {
   sink::SinkHandle sink_handle;         ///< The sink in which to print the statusbar (for e.g. stdout).
   std::vector<std::streampos> line_start_positions; ///< File write positions for each bar line (file sinks only).
   std::vector<double> percentages;      ///< Progress percentages (0-100) for each bar.
-  std::vector<unsigned int> positions;  ///< Vertical positions (1=topmost).
+  std::vector<unsigned int> positions;  ///< Relative rank within this group (larger = higher).
   std::vector<unsigned int> bar_sizes;  ///< Total width (characters) of each bar.
   std::vector<std::string> prefixes;    ///< Text displayed before each bar.
   std::vector<std::string> postfixes;   ///< Text displayed after each bar.
   std::vector<std::size_t> spin_idxs;   ///< Spinner animation indices.
-  unsigned int id;                      ///< unique id corresponding to the handle
+  std::size_t id;                       ///< unique id corresponding to the handle
   bool error_reported;                  ///< Indicator whether error already has been reported
 } Statusbar;
 // clang-format on
@@ -89,7 +89,8 @@ typedef struct {
  */
 std::vector<Statusbar> _statusbar_registry = {};
 std::vector<StatusbarHandle> _statusbar_free_handles = {};
-unsigned int _statusbar_handle_id_count = 0;
+std::vector<std::size_t> _statusbar_stack_order = {};
+std::size_t _statusbar_handle_id_count = 0;
 
 static std::mutex _statusbar_registry_mutex;
 static std::mutex _statusbar_id_count_mutex;
@@ -254,7 +255,7 @@ int _IsValidStatusbarHandleVerbose(const StatusbarHandle& statusbar_handle,
   const int is_valid_handle = _IsValidStatusbarHandle(statusbar_handle);
   if (is_valid_handle == -1) {
     LogWrn(kFilename, err_sink_handle,
-           "Invalid handle: Valid flag set to false (idx: %zu, ID: %u)",
+           "Invalid handle: Valid flag set to false (idx: %zu, ID: %zu)",
            statusbar_handle.idx, statusbar_handle.id);
     return -1;
   }
@@ -270,7 +271,7 @@ int _IsValidStatusbarHandleVerbose(const StatusbarHandle& statusbar_handle,
 
   if (is_valid_handle == -3) {
     LogWrn(kFilename, err_sink_handle,
-           "Invalid Handle: ID mismatch: handle %u vs registry %u",
+           "Invalid Handle: ID mismatch: handle %u vs registry %zu",
            statusbar_handle.id, target.id);
     return -3;
   }
@@ -454,76 +455,92 @@ int _DrawStatusbarComponent(const sink::SinkHandle& sink_handle,
 }
 
 /**
- * \brief Counts the total number of bar components across the given statusbars.
+ * \brief Computes the absolute terminal layout of all statusbar groups for a
+ * given sink type.
  *
- * \param[in] relevant_statusbar_idxs Indices into _statusbar_registry.
+ * Walks _statusbar_stack_order (creation order; front = oldest, back = newest),
+ * keeps only statusbars whose sink type matches \p sink_type, and assigns each
+ * bar an absolute offset in lines above the cursor (1 = the line directly above
+ * the cursor). Groups are stacked newest-nearest-the-cursor; within a group,
+ * larger \c positions values are placed higher.
  *
- * \return Total number of bar components (sum of positions.size() for each
- * statusbar).
+ * \warning The caller must hold _statusbar_registry_mutex. This function only
+ * reads the registry; it performs no locking and no drawing.
+ *
+ * \param[in]  sink_type   Only statusbars on a sink of this type are included.
+ * \param[out] handle_idx  Registry index of each bar's statusbar.
+ * \param[out] bar_idx     Bar component index within that statusbar.
+ * \param[out] offset      Lines above the cursor (1 = the line directly above
+ *                         , smalles offset first).
+ * \param[out] total_lines Total number of lines the stack occupies.
+ *
+ * \return statusbar_log::kStatusbarLogSuccess (i.e. 0) on success, or one of
+ * these error codes:
+ *         -  statusbar_log::kStatusbarLogSuccess (i.e. 0): Success
+ *         - -1: A stack-order entry was out of registry bounds
+ *         - -2: A stack-order entry referenced a destroyed statusbar (id 0)
+ *         - -3: Failed to query a statusbar's sink type
+ *
+ * \note On a negative return the output vectors hold only partially computed
+ * data and must not be used.
  */
-std::size_t _CountBarComponents(
-    const std::vector<std::size_t>& relevant_statusbar_idxs) {
-  std::size_t n_bars = 0;
-  for (std::size_t i : relevant_statusbar_idxs) {
-    for (std::size_t j = 0; j < _statusbar_registry[i].positions.size(); ++j) {
-      n_bars++;
-    }
-  }
-  return n_bars;
-}
+int _ComputeStackLayout(const sink::SinkType& sink_type,
+                        std::vector<std::size_t>& handle_idx,
+                        std::vector<std::size_t>& bar_idx,
+                        std::vector<int>& offset, unsigned int& total_lines) {
+  int err = kStatusbarLogSuccess;
+  if (handle_idx.size() > 0) handle_idx.clear();
+  if (bar_idx.size() > 0) bar_idx.clear();
+  if (offset.size() > 0) offset.clear();
+  total_lines = 0;
+  if (_statusbar_stack_order.size() == 0) return kStatusbarLogSuccess;
 
-/**
- * \brief Builds a flat map of {statusbar_index, bar_index} pairs for all bar
- * components across the given statusbars.
- *
- * Each entry maps to a single bar component in _statusbar_registry. The
- * returned vector has n_bars elements.
- *
- * \param[in] relevant_statusbar_idxs Indices into _statusbar_registry.
- * \param[in] n_bars Total number of bar components (from _CountBarComponents).
- *
- * \return Vector of {statusbar_index, bar_index} pairs.
- */
-std::vector<std::array<std::size_t, 2>> _GetStatusbarComponentIndexMap(
-    const std::vector<std::size_t>& relevant_statusbar_idxs,
-    std::size_t n_bars) {
-  std::vector<std::array<std::size_t, 2>> component_map(n_bars);
-  std::size_t idx = 0;
-  for (std::size_t i : relevant_statusbar_idxs) {
-    for (std::size_t j = 0; j < _statusbar_registry[i].positions.size(); ++j) {
-      component_map[idx] = {i, j};
-      idx++;
-    }
-  }
-  return component_map;
-}
+  for (std::size_t s = _statusbar_stack_order.size(); s-- > 0;) {
+    const std::size_t i = _statusbar_stack_order[s];
+    if (i >= _statusbar_registry.size()) return -1;
+    if (_statusbar_registry[i].id == 0) return -2;
 
-/**
- * \brief Sorts a component map by position in descending order (highest
- * position first).
- *
- * \param[in, out] component_map The component map to sort in place.
- */
-void _SortStatusbarComponentMap(
-    std::vector<std::array<std::size_t, 2>>& component_map) {
-  std::sort(
-      component_map.begin(), component_map.end(),
-      [](std::array<std::size_t, 2>& map1, std::array<std::size_t, 2>& map2) {
-        return _statusbar_registry[map1[0]].positions[map1[1]] >
-               _statusbar_registry[map2[0]].positions[map2[1]];
-      });
+    sink::SinkType compare_sink_type;
+    err = sink::get_sink_type_silent(_statusbar_registry[i].sink_handle,
+                                     compare_sink_type);
+    if (err != kStatusbarLogSuccess) return -3;
+    if (compare_sink_type != sink_type) continue;
+
+    const std::vector<unsigned int>& positions =
+        _statusbar_registry[i].positions;
+    const std::size_t n_bars = positions.size();
+
+    std::vector<std::size_t> bar_order(n_bars);
+    for (std::size_t j = 0; j < n_bars; j++) bar_order[j] = j;
+    std::sort(bar_order.begin(), bar_order.end(),
+              [&positions](std::size_t a, std::size_t b) {
+                return positions[a] < positions[b];
+              });
+    for (std::size_t rank = 0; rank < n_bars; rank++) {
+      handle_idx.push_back(i);
+      bar_idx.push_back(bar_order[rank]);
+      offset.push_back(static_cast<int>(total_lines) + static_cast<int>(rank) +
+                       1);
+    }
+    total_lines += static_cast<unsigned int>(n_bars);
+  }
+
+  return err;
 }
 
 /**
  * \brief Redraws all statusbar components in place for a file sink.
  *
- * Seeks to the first bar's recorded line position and rewrites each bar
- * line sequentially, updating line_start_positions via tellp as it goes.
+ * Seeks to the top bar's recorded line position and rewrites each bar line
+ * sequentially top-to-bottom, updating line_start_positions via tellp as it
+ * goes.
  *
  * \param[in] sink_handle File sink handle to write to.
  * \param[in] write_lock Unique lock of the sink (must be locked).
- * \param[in] sorted_relevant_component_map Sorted component map (highest
- * position first) of {statusbar_index, bar_index} pairs.
+ * \param[in] lay_handle_idx Registry indices of the bars to draw, ordered
+ * bottom-to-top as produced by _ComputeStackLayout (iterated in reverse so the
+ * file lines run top-to-bottom).
+ * \param[in] lay_bar_idx Matching bar-component indices for lay_handle_idx.
  *
  * \return Returns statusbar_log::kStatusbarLogSuccess (i.e. 0) on success, or
  * one of these error/warning codes:
@@ -533,33 +550,33 @@ void _SortStatusbarComponentMap(
  */
 int _DrawStatusbarsOwnedFile(const sink::SinkHandle& sink_handle,
                              std::unique_lock<std::mutex>& write_lock,
-                             const std::vector<std::array<std::size_t, 2>>&
-                                 sorted_relevant_component_map) {
+                             const std::vector<std::size_t>& lay_handle_idx,
+                             const std::vector<std::size_t>& lay_bar_idx) {
   if (!write_lock.owns_lock()) {
     return -7;
   }
 
   int err = kStatusbarLogSuccess;
 
-  if (sorted_relevant_component_map.empty()) return err;
+  if (lay_handle_idx.empty()) return err;
 
-  std::streampos& p_line_pos =
-      _statusbar_registry[sorted_relevant_component_map[0][0]]
-          .line_start_positions[sorted_relevant_component_map[0][1]];
+  std::streampos& p_line_pos = _statusbar_registry[lay_handle_idx.back()]
+                                   .line_start_positions[lay_bar_idx.back()];
   sink::SinkSeekP(sink_handle, p_line_pos);
 
   std::string status_str;
-  for (auto& map : sorted_relevant_component_map) {
+  for (std::size_t m = lay_handle_idx.size(); m-- > 0;) {
+    const std::size_t i = lay_handle_idx[m];
+    const std::size_t j = lay_bar_idx[m];
     sink::SinkTellP(sink_handle,
-                    &_statusbar_registry[map[0]].line_start_positions[map[1]]);
+                    &_statusbar_registry[i].line_start_positions[j]);
 
-    err = _StatusbarComponentString(
-        status_str, sink_handle, write_lock,
-        _statusbar_registry[map[0]].percentages[map[1]],
-        _statusbar_registry[map[0]].bar_sizes[map[1]],
-        _statusbar_registry[map[0]].prefixes[map[1]],
-        _statusbar_registry[map[0]].postfixes[map[1]],
-        _statusbar_registry[map[0]].spin_idxs[map[1]]);
+    err = _StatusbarComponentString(status_str, sink_handle, write_lock,
+                                    _statusbar_registry[i].percentages[j],
+                                    _statusbar_registry[i].bar_sizes[j],
+                                    _statusbar_registry[i].prefixes[j],
+                                    _statusbar_registry[i].postfixes[j],
+                                    _statusbar_registry[i].spin_idxs[j]);
     std::ostringstream oss;
     oss << status_str << '\n';
     SSIZE_T written = sink::SinkWriteStr(sink_handle, oss.str());
@@ -668,15 +685,23 @@ int LogV(const LogLevel log_level, const std::string& filename,
       std::string(prefix) + " [" + sanitized_filename + "]: " + message + "\n";
 
   if (sink_type == sink::kSinkFileOwned) {
-    std::size_t n_bars = _CountBarComponents(relevant_statusbar_idxs);
-    std::vector<std::array<std::size_t, 2>> component_map =
-        _GetStatusbarComponentIndexMap(relevant_statusbar_idxs, n_bars);
-    _SortStatusbarComponentMap(component_map);
+    std::vector<std::size_t> lay_handle_idx, lay_bar_idx;
+    std::vector<int> lay_offset;
+    unsigned int total_lines;
+    err = _ComputeStackLayout(sink_type, lay_handle_idx, lay_bar_idx,
+                              lay_offset, total_lines);
+    if (err != kStatusbarLogSuccess) {
+      std::cout << "ERROR [" << kFilename << "]: "
+                << "Failed to compute stack layout in LogV (owned file sink) "
+                   "(_ComputeStackLayout error code \""
+                << err << "\")!\n";
+      return -8;
+    }
 
-    if (!component_map.empty()) {
+    if (!lay_handle_idx.empty()) {
       sink::SinkSeekP(sink_handle,
-                      _statusbar_registry[component_map[0][0]]
-                          .line_start_positions[component_map[0][1]]);
+                      _statusbar_registry[lay_handle_idx.back()]
+                          .line_start_positions[lay_bar_idx.back()]);
     }
 
     SSIZE_T written = sink::SinkWriteStr(sink_handle, formatted_message);
@@ -687,94 +712,95 @@ int LogV(const LogLevel log_level, const std::string& filename,
     }
     _ConditionalFlush(sink_handle);
 
-    if (!component_map.empty()) {
+    if (!lay_handle_idx.empty()) {
       sink::SinkTellP(sink_handle,
-                      &_statusbar_registry[component_map[0][0]]
-                           .line_start_positions[component_map[0][1]]);
-      _DrawStatusbarsOwnedFile(sink_handle, write_lock, component_map);
+                      &_statusbar_registry[lay_handle_idx.back()]
+                           .line_start_positions[lay_bar_idx.back()]);
+      _DrawStatusbarsOwnedFile(sink_handle, write_lock, lay_handle_idx,
+                               lay_bar_idx);
     }
   } else {
-    int move = 0;
-    for (std::size_t i : relevant_statusbar_idxs) {
-      for (std::size_t j = 0; j < _statusbar_registry[i].positions.size();
-           ++j) {
-        int current_pos =
-            static_cast<int>(_statusbar_registry[i].positions[j]);
-        if (current_pos > move) {
-          move = current_pos;
-        }
-      }
+    std::vector<std::size_t> lay_handle_idx, lay_bar_idx;
+    std::vector<int> lay_offset;
+    unsigned int total_lines;
+    err = _ComputeStackLayout(sink_type, lay_handle_idx, lay_bar_idx,
+                              lay_offset, total_lines);
+    if (err < 0) {
+      std::cout << "ERROR [" << kFilename << "]: "
+                << "Failed to compute stack layout in LogV "
+                   "(_ComputeStackLayout error code \""
+                << err << "\")!\n";
+      return -8;
     }
 
+    int move = static_cast<int>(total_lines);
+
     sink::MoveCursorUp(sink_handle, move);
-    if (!relevant_statusbar_idxs.empty()) printf("\r\033[2K\r");
+    if (total_lines > 0) printf("\r\033[2K\r");
 
     SSIZE_T written = sink::SinkWriteStr(sink_handle, formatted_message);
     if (written <= 0) {
       std::cout << "ERROR [" << kFilename << "]: "
                 << "Sink Write Failed in LogV!\n";
-      return -6;
+      return -7;
     }
     _ConditionalFlush(sink_handle);
 
     sink::MoveCursorUp(sink_handle, -move);
-    for (std::size_t i : relevant_statusbar_idxs) {
-      for (std::size_t j = 0; j < _statusbar_registry[i].positions.size();
-           ++j) {
-        int bar_err_code = _DrawStatusbarComponent(
-            sink_handle, write_lock, _statusbar_registry[i].percentages[j],
-            _statusbar_registry[i].bar_sizes[j],
-            _statusbar_registry[i].prefixes[j],
-            _statusbar_registry[i].postfixes[j],
-            _statusbar_registry[i].spin_idxs[j],
-            static_cast<int>(_statusbar_registry[i].positions[j]));
-        if ((bar_err_code != kStatusbarLogSuccess) &&
-            !_statusbar_registry[i].error_reported) {
-          std::string why;
-          bool is_critical_error = false;
-          switch (bar_err_code) {
-            case -1:
-              is_critical_error = true;
-              why = "Terminal width detection failed (Windows)";
-              break;
-            case -2:
-              is_critical_error = true;
-              why = "Terminal width detection failed (Linux)";
-              break;
-            case -3:
-              is_critical_error = false;
-              why = "Truncantion was needed (bar exeeds terminal width)";
-              break;
-            case -4:
-              is_critical_error = true;
-              why =
-                  "Both terminal width detection failed (Window) AND "
-                  "truncation";
-              break;
-            case -5:
-              is_critical_error = true;
-              why =
-                  "Both terminal width detection failed (Linux) AND truncation";
-              break;
-            case -6:
-              is_critical_error = true;
-              why = "Invalid percentage given";
-              break;
-            default:
-              is_critical_error = true;
-              why = "Unknown _DrawStatusbarComponent error!";
-              break;
-          }
-          if (is_critical_error) {
-            _statusbar_registry[i].error_reported = true;
-            write_lock.unlock();
-            registry_lock.unlock();
-            printf(
-                "ERROR [statusbarlog.cc]: LogV(...) failed updating "
-                "statusbar: %s on statusbar with ID %zu at bar idx %zu",
-                why.c_str(), i, j);
-            return bar_err_code - 5;
-          }
+    for (std::size_t k = 0; k < lay_handle_idx.size(); ++k) {
+      const std::size_t i = lay_handle_idx[k];
+      const std::size_t j = lay_bar_idx[k];
+      int bar_err_code = _DrawStatusbarComponent(
+          sink_handle, write_lock, _statusbar_registry[i].percentages[j],
+          _statusbar_registry[i].bar_sizes[j],
+          _statusbar_registry[i].prefixes[j],
+          _statusbar_registry[i].postfixes[j],
+          _statusbar_registry[i].spin_idxs[j], lay_offset[k]);
+      if ((bar_err_code != kStatusbarLogSuccess) &&
+          !_statusbar_registry[i].error_reported) {
+        std::string why;
+        bool is_critical_error = false;
+        switch (bar_err_code) {
+          case -1:
+            is_critical_error = true;
+            why = "Terminal width detection failed (Windows)";
+            break;
+          case -2:
+            is_critical_error = true;
+            why = "Terminal width detection failed (Linux)";
+            break;
+          case -3:
+            is_critical_error = false;
+            why = "Truncantion was needed (bar exeeds terminal width)";
+            break;
+          case -4:
+            is_critical_error = true;
+            why =
+                "Both terminal width detection failed (Window) AND "
+                "truncation";
+            break;
+          case -5:
+            is_critical_error = true;
+            why = "Both terminal width detection failed (Linux) AND truncation";
+            break;
+          case -6:
+            is_critical_error = true;
+            why = "Invalid percentage given";
+            break;
+          default:
+            is_critical_error = true;
+            why = "Unknown _DrawStatusbarComponent error!";
+            break;
+        }
+        if (is_critical_error) {
+          _statusbar_registry[i].error_reported = true;
+          write_lock.unlock();
+          registry_lock.unlock();
+          printf(
+              "ERROR [statusbarlog.cc]: LogV(...) failed updating "
+              "statusbar: %s on statusbar with ID %zu at bar idx %zu",
+              why.c_str(), i, j);
+          return bar_err_code - 8;
         }
       }
     }
@@ -835,11 +861,23 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
   err = sink::get_mutex_ptr(sink_handle, write_mutex_ptr);
   if (err != kStatusbarLogSuccess) {
     LogErr(kFilename, sink_handle,
-           "Failed to destory statusbar_handle! Failed to get sink mutex ptr. "
+           "Failed to create statusbar_handle! Failed to get sink mutex ptr. "
            "Errorcode: %d",
            err);
     return -5;
   }
+
+  for (std::size_t i = 0; i < _positions.size(); ++i) {
+    for (std::size_t j = i + 1; j < _positions.size(); ++j) {
+      if (_positions[i] == _positions[j]) {
+        LogErr(kFilename, sink_handle,
+               "Failed to create statusbar_handle: position values within a "
+               "group must be distinct.");
+        return -6;
+      }
+    }
+  }
+
   std::unique_lock<std::mutex> write_lock(*write_mutex_ptr, std::defer_lock);
   std::unique_lock<std::mutex> registry_lock(_statusbar_registry_mutex,
                                              std::defer_lock);
@@ -918,6 +956,7 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
                   sanitized_bar_sizes, sanitized_prefixes, sanitized_postfixes,
                   spin_idxs, _statusbar_handle_id_count, false});
   }
+  _statusbar_stack_order.push_back(statusbar_handle.idx);
 
   statusbar_handle.id = _statusbar_handle_id_count;
   statusbar_handle.valid = true;
@@ -934,28 +973,39 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
       relevant_statusbar_idxs.push_back(i);
     }
 
-    std::size_t n_bars_in_sink = _CountBarComponents(relevant_statusbar_idxs);
-    std::vector<std::array<std::size_t, 2>> component_map =
-        _GetStatusbarComponentIndexMap(relevant_statusbar_idxs, n_bars_in_sink);
-    _SortStatusbarComponentMap(component_map);
-    if (!component_map.empty()) {
+    std::vector<std::size_t> lay_handle_idx, lay_bar_idx;
+    std::vector<int> lay_offset;
+    unsigned int total_lines;
+    err = _ComputeStackLayout(sink_type, lay_handle_idx, lay_bar_idx,
+                              lay_offset, total_lines);
+    if (err == kStatusbarLogSuccess && !lay_handle_idx.empty()) {
       sink::SinkTellP(sink_handle,
-                      &_statusbar_registry[component_map[0][0]]
-                           .line_start_positions[component_map[0][1]]);
+                      &_statusbar_registry[lay_handle_idx.back()]
+                           .line_start_positions[lay_bar_idx.back()]);
 
-      _DrawStatusbarsOwnedFile(sink_handle, write_lock, component_map);
+      _DrawStatusbarsOwnedFile(sink_handle, write_lock, lay_handle_idx,
+                               lay_bar_idx);
     }
 
   } else {
-    for (std::size_t idx = 0; idx < num_bars; idx++) {
-      _DrawStatusbarComponent(
-          sink_handle, write_lock, 0.0,
-          _statusbar_registry[statusbar_handle.idx].bar_sizes[idx],
-          _statusbar_registry[statusbar_handle.idx].prefixes[idx],
-          _statusbar_registry[statusbar_handle.idx].postfixes[idx],
-          _statusbar_registry[statusbar_handle.idx].spin_idxs[idx],
-          static_cast<int>(
-              _statusbar_registry[statusbar_handle.idx].positions[idx]));
+    sink::MoveCursorUp(sink_handle, -static_cast<int>(num_bars));
+
+    std::vector<std::size_t> lay_handle_idx, lay_bar_idx;
+    std::vector<int> lay_offset;
+    unsigned int total_lines;
+    err = _ComputeStackLayout(sink_type, lay_handle_idx, lay_bar_idx,
+                              lay_offset, total_lines);
+    if (err == kStatusbarLogSuccess) {
+      for (std::size_t k = 0; k < lay_handle_idx.size(); ++k) {
+        const std::size_t i = lay_handle_idx[k];
+        const std::size_t j = lay_bar_idx[k];
+        _DrawStatusbarComponent(
+            sink_handle, write_lock, _statusbar_registry[i].percentages[j],
+            _statusbar_registry[i].bar_sizes[j],
+            _statusbar_registry[i].prefixes[j],
+            _statusbar_registry[i].postfixes[j],
+            _statusbar_registry[i].spin_idxs[j], lay_offset[k]);
+      }
     }
   }
   return kStatusbarLogSuccess;
@@ -1002,12 +1052,33 @@ int DestroyStatusbarHandle(StatusbarHandle& statusbar_handle) {
 
   sink::SinkType sink_type;
   sink::get_sink_type_silent(sink_handle, sink_type);
-  // TODO : does it actually make sense to clear
+  std::erase(_statusbar_stack_order, statusbar_handle.idx);
   if (sink_type != sink::kSinkFileOwned) {
-    for (std::size_t i = 0; i < target.positions.size(); i++) {
-      sink::MoveCursorUp(sink_handle, static_cast<int>(target.positions[i]));
-      ClearCurrentLine(sink_handle);
-      sink::MoveCursorUp(sink_handle, -static_cast<int>(target.positions[i]));
+    const int k = static_cast<int>(target.positions.size());
+
+    std::vector<std::size_t> lay_handle_idx, lay_bar_idx;
+    std::vector<int> lay_offset;
+    unsigned int total_lines;
+    int lerr = _ComputeStackLayout(sink_type, lay_handle_idx, lay_bar_idx,
+                                   lay_offset, total_lines);
+    if (lerr == kStatusbarLogSuccess) {
+      for (std::size_t m = 0; m < lay_handle_idx.size(); ++m) {
+        const std::size_t i = lay_handle_idx[m];
+        const std::size_t j = lay_bar_idx[m];
+        _DrawStatusbarComponent(
+            sink_handle, write_lock, _statusbar_registry[i].percentages[j],
+            _statusbar_registry[i].bar_sizes[j],
+            _statusbar_registry[i].prefixes[j],
+            _statusbar_registry[i].postfixes[j],
+            _statusbar_registry[i].spin_idxs[j], lay_offset[m]);
+      }
+      // clear the lines the destroyed group's bars used to occupy
+      for (int o = static_cast<int>(total_lines) + 1;
+           o <= static_cast<int>(total_lines) + k; ++o) {
+        sink::MoveCursorUp(sink_handle, o);
+        ClearCurrentLine(sink_handle);
+        sink::MoveCursorUp(sink_handle, -o);
+      }
     }
   }
   sink::FlushSinkHandle(sink_handle);
@@ -1114,18 +1185,49 @@ int UpdateStatusbar(StatusbarHandle& statusbar_handle, const std::size_t idx,
       relevant_statusbar_idxs.push_back(i);
     }
 
-    std::size_t n_bars_in_sink = _CountBarComponents(relevant_statusbar_idxs);
-    std::vector<std::array<std::size_t, 2>> component_map =
-        _GetStatusbarComponentIndexMap(relevant_statusbar_idxs, n_bars_in_sink);
-    _SortStatusbarComponentMap(component_map);
-    if (!component_map.empty()) {
-      _DrawStatusbarsOwnedFile(sink_handle, write_lock, component_map);
+    std::vector<std::size_t> lay_handle_idx, lay_bar_idx;
+    std::vector<int> lay_offset;
+    unsigned int total_lines;
+    err = _ComputeStackLayout(sink_type, lay_handle_idx, lay_bar_idx,
+                              lay_offset, total_lines);
+    if (err != kStatusbarLogSuccess) {
+      write_lock.unlock();
+      registry_lock.unlock();
+      LogErr(kFilename, sink_handle,
+             "Failed to update statusbar: layout computation failed (%d).", err);
+      return -9;
+    }
+
+    if (!lay_handle_idx.empty()) {
+      _DrawStatusbarsOwnedFile(sink_handle, write_lock, lay_handle_idx,
+                               lay_bar_idx);
     }
   } else {
+    std::vector<std::size_t> lay_handle_idx, lay_bar_idx;
+    std::vector<int> lay_offset;
+    unsigned int total_lines;
+    err = _ComputeStackLayout(sink_type, lay_handle_idx, lay_bar_idx,
+                              lay_offset, total_lines);
+    if (err != kStatusbarLogSuccess) {
+      write_lock.unlock();
+      registry_lock.unlock();
+      LogErr(kFilename, sink_handle,
+             "Failed to update statusbar: layout computation failed (%d).",
+             err);
+      return -9;
+    }
+    int move = 0;
+    for (std::size_t k = 0; k < lay_handle_idx.size(); ++k) {
+      if (lay_handle_idx[k] == statusbar_handle.idx && lay_bar_idx[k] == idx) {
+        move = lay_offset[k];
+        break;
+      }
+    }
+
     int bar_error_code = _DrawStatusbarComponent(
         sink_handle, write_lock, percent, statusbar.bar_sizes[idx],
         statusbar.prefixes[idx], statusbar.postfixes[idx],
-        statusbar.spin_idxs[idx], static_cast<int>(statusbar.positions[idx]));
+        statusbar.spin_idxs[idx], move);
 
     if (bar_error_code != kStatusbarLogSuccess && !statusbar.error_reported) {
       statusbar.error_reported = true;
@@ -1157,7 +1259,7 @@ int UpdateStatusbar(StatusbarHandle& statusbar_handle, const std::size_t idx,
       write_lock.unlock();
       registry_lock.unlock();
       LogErr(kFilename, sink_handle,
-             "%s on statusbar with ID %u at bar idx %zu!", why, statusbar.id,
+             "%s on statusbar with ID %zu at bar idx %zu!", why, statusbar.id,
              idx);
     }
   }
@@ -1166,5 +1268,4 @@ int UpdateStatusbar(StatusbarHandle& statusbar_handle, const std::size_t idx,
   registry_lock.unlock();
   return kStatusbarLogSuccess;
 }
-
 };  // namespace statusbar_log

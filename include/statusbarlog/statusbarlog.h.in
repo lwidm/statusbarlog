@@ -113,7 +113,7 @@ constexpr LogLevel kLogLevel = @STATUSBARLOG_LOG_LEVEL@;
 typedef struct {
   std::size_t idx;  ///< Positional index corresponding to the statusbars
                     ///< position in the registry
-  unsigned int id;  ///< ID of the statusbar. Must be unique. Used to verify
+  std::size_t id;   ///< ID of the statusbar. Must be unique. Used to verify
                     ///< validity of statusbar
   bool valid;  ///< weather or not this statusbar is valid (for e.g. false after
                ///< destruction)
@@ -155,20 +155,21 @@ void ClearCurrentLine(sink::SinkHandle sink_handle);
  * \param[in] log_level Severity level of this message.
  * \param[in] filename Source filename or tag (will be printed in log message,
  * should be the origin of the log message).
+ * \param[in] sink_handle Sink to write the log message to.
  * \param[in] fmt printf-style format string.
  * \param[in] args Additional format arguments.
  *
  * \return statusbar_log::kStatusbarLogSuccess (i.e. 0) on success, or one of
  * these status codes:
- *         -  statusbar_log::kStatusbarLogSuccess (i.e. 0): Successfull log
- *         - -1: Invalid statusbar handle: Valid flag of handle set to false
- *         - -2: Invalid statusbar handle: Handle index out of bounds in
- * `statusbar_registry`
- *         - -3: Invalid statusbar handle: Handle IDs don't match between handle
- * struct
- *         - -4: Invalid statusbar handle: Handle ID is 0 (i.e. invalid)
- *         - -5: Invalid statusbar handle: Errorcode not handled
- * and registry
+ *         -  statusbar_log::kStatusbarLogSuccess (i.e. 0): Successful log (or
+ * the message was below the compile-time log level kLogLevel)
+ *         - -1 to -5: Failed to determine the sink type (invalid sink handle);
+ * the value is the sink::get_sink_type error code
+ *         - -6: Sink write failed (file sink)
+ *         - -7: Sink write failed (terminal sink)
+ *         - -8: Layout computation failed (_ComputeStackLayout)
+ *         - <= -9: A statusbar redraw failed while reprinting the bars; the
+ * value is the _DrawStatusbarComponent error code minus 8
  *
  * \note Logging temporarily moves status bars down to avoid visual glitches.
  *
@@ -190,7 +191,7 @@ inline int Log(LogLevel log_level, const std::string& filename,
                sink::SinkHandle sink_handle, const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  const int err =  LogV(log_level, filename, sink_handle, fmt, args);
+  const int err = LogV(log_level, filename, sink_handle, fmt, args);
   va_end(args);
   return err;
 }
@@ -218,7 +219,7 @@ inline int LogWrn(const std::string& filename, sink::SinkHandle sink_handle,
                   const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  const int err =  LogV(kLogLevelWrn, filename, sink_handle, fmt, args);
+  const int err = LogV(kLogLevelWrn, filename, sink_handle, fmt, args);
   va_end(args);
   return err;
 }
@@ -232,7 +233,7 @@ inline int LogInf(const std::string& filename, sink::SinkHandle sink_handle,
                   const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  const int err =  LogV(kLogLevelInf, filename, sink_handle, fmt, args);
+  const int err = LogV(kLogLevelInf, filename, sink_handle, fmt, args);
   va_end(args);
   return err;
 }
@@ -246,7 +247,7 @@ inline int LogDbg(const std::string& filename, sink::SinkHandle sink_handle,
                   const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  const int err =  LogV(kLogLevelDbg, filename, sink_handle, fmt, args);
+  const int err = LogV(kLogLevelDbg, filename, sink_handle, fmt, args);
   va_end(args);
   return err;
 }
@@ -265,9 +266,10 @@ inline int LogDbg(const std::string& filename, sink::SinkHandle sink_handle,
  *
  * \param[out] StatusbarHandle Struct to initialize.
  * \param[in] SinkHandle Struct to use for the statusbar.
- * \param[in] _positions Vertical positions (1=topmost) of each bar. For e.g. if
- * you want two bars stacked on top of each other you would pass {2, 1} (2: top
- * bar, 1: lower bar).
+ * \param[in] _positions Relative rank of each bar within this group (larger =
+ * higher); the values are sort keys, not absolute terminal rows, and must be
+ * distinct. E.g. {2, 1} stacks two bars with 2 on top. See
+ * \ref layout_model_page.
  * \param[in] _bar_sizes Widths of each bar (characters excluding prefix,
  * postfix, percentage, '[' and '[').
  * \param[in] _prefixes Text before each bar.
@@ -281,8 +283,15 @@ inline int LogDbg(const std::string& filename, sink::SinkHandle sink_handle,
  *         - -3: Failed to create statusbar handle (invalid inputs)
  *         - -4: Failed to create statusbar handle (handle registry exceeds
  * maximum element limit)
+ *         - -5: Failed to create statusbar handle (failed to get sink mutex
+ * ptr)
+ *         - -6: Failed to create statusbar handle (all values in _positions
+ * must be distinct)
  *
  * \warning Don't forget to destroy the statusbar_handle after use.
+ *
+ * \note Creating a group opens its own lines nearest the cursor and repaints the
+ * whole stack; see \ref layout_model_page.
  *
  * \see Statusbar: The statusbar struct.
  * \see _statusbar_registry: The registry for statusbar struct in use.
@@ -313,7 +322,12 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
  *         - -1: Invalid handle passed (valid flag set to false)
  *         - -2: Invalid handle passed (index out of registry bounds)
  *         - -3: Invalid handle passed (IDs don't match)
- *         - -4: Invalid handle passed (Other error)
+ *         - -4: Invalid handle passed (ID is 0)
+ *         - -5: Invalid sink handle (in the statusbar)
+ *         - -6: Failed to get the sink mutex pointer
+ *
+ * \note Destroying a group repaints the remaining stack compacted toward the
+ * cursor and clears the freed lines; see \ref layout_model_page.
  *
  * \see Statusbar: The statusbar struct.
  * \see _statusbar_registry: The registry for statusbar struct in use.
@@ -331,8 +345,7 @@ int DestroyStatusbarHandle(StatusbarHandle& statusbar_handle);
  * This Function takes a StatusbarHandle struct and 'updates' it by printing
  * the bar given a new percentage. The statusbar can consist of multiple bars
  * which is why an index has to be passed. This function moves the cursor to the
- * correct location in the terminal corresponding to the index, clears the row
- * and prints an updated bar.
+ * bar's row in the stack, clears it, and prints the updated bar.
  *
  * Example of a statusbar:
  *  "prefix1 string"[########/       ] 50% "postfix1 string"
@@ -347,14 +360,20 @@ int DestroyStatusbarHandle(StatusbarHandle& statusbar_handle);
  * \return Returns statusbar_log::kStatusbarLogSuccess (i.e. 0) on success, or
  * one of these error/warning codes:
  *         -  statusbar_log::kStatusbarLogSuccess (i.e. 0): Success (no errors)
- *         - -1: Invalid handle passed (valid flag set to false)
- *         - -2: Invalid handle passed (index out of registry bounds)
- *         - -3: Invalid handle passed (IDs don't match)
- *         - -4: Invalid handle passed (Other error)
- *         - -5: Invalid percentage passed
- *         - -6: Invalid bar index passed
+ *         - -1: Invalid sink handle (in the statusbar)
+ *         - -2: Failed to get the sink mutex pointer
+ *         - -3: Invalid handle (valid flag set to false)
+ *         - -4: Invalid handle (index out of registry bounds)
+ *         - -5: Invalid handle (IDs don't match)
+ *         - -6: Invalid handle (ID is 0)
+ *         - -7: Invalid percentage passed
+ *         - -8: Invalid bar index passed
+ *         - -9: Layout computation failed
  *
  * \details The spinner character cycles through { |, /, -, \ } on each update.
+ *
+ * \note The bar's absolute terminal row is derived from the stacking layout,
+ * not from its raw position value; see \ref layout_model_page.
  *
  * \see CreateStatusbarHandle: Creating/Initializing a statusbar handle.
  * \see Statusbar: The statusbar struct.

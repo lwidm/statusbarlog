@@ -49,7 +49,7 @@ typedef enum {
 typedef struct {
   std::size_t idx;  ///< Positional index corresponding to the sinks
                     ///< position in the registry
-  unsigned int id;  ///< ID of the sink. Must be unique. Used to verify
+  std::size_t id;   ///< ID of the sink. Must be unique. Used to verify
                     ///< validity of statusbar
   bool valid;       ///< weather or not this sink is valid (for e.g. false after
                     ///< destruction)

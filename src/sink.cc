@@ -58,14 +58,14 @@ typedef struct {
       owned_file;    ///< Some sinks need to own a file (nullptr otherwise)
   SinkType type;     ///< The sinks type
   std::string path;  ///< path for file-backed sinks (empty otherwise)
+  std::size_t id;    ///< id of the struct, used for validating handles
   int fd;  ///< File descriptor, used for differenciating between cout and cerr
            ///< (-1 if not applicable)
-  unsigned int id;  ///< id of the struct, used for validating handles
 } Sink;
 
 std::vector<std::unique_ptr<Sink>> _sink_registry = {};
 std::vector<SinkHandle> _sink_free_handles = {};
-unsigned int _sink_handle_id_count = 0;
+std::size_t _sink_handle_id_count = 0;
 
 static std::mutex _sink_registry_mutex;
 static std::mutex _sink_id_count_mutex;
@@ -89,8 +89,9 @@ static std::mutex _sink_id_count_mutex;
 int _ValidateSinkCreation(SinkHandle& sink_handle) {
   const int err = IsValidSinkHandle(sink_handle);
   if (err == kStatusbarLogSuccess) {
-    std::cout << "ERROR [" << kFilename << "]: "
-              << "Handle already is valid, cannot use it to create a new sink\n";
+    std::cout
+        << "ERROR [" << kFilename << "]: "
+        << "Handle already is valid, cannot use it to create a new sink\n";
     return -1;
   }
   sink_handle.valid = false;
@@ -497,7 +498,7 @@ int get_sink_type_silent(const SinkHandle& sink_handle, SinkType& sink_type) {
   return kStatusbarLogSuccess;
 }
 
-int SinkTellP(const SinkHandle& sink_handle, std::streampos* streampos){
+int SinkTellP(const SinkHandle& sink_handle, std::streampos* streampos) {
   int err = IsValidSinkHandle(sink_handle);
   if (err != kStatusbarLogSuccess) return err;
   SinkType sink_type = _sink_registry[sink_handle.idx]->type;
@@ -506,7 +507,7 @@ int SinkTellP(const SinkHandle& sink_handle, std::streampos* streampos){
   return kStatusbarLogSuccess;
 }
 
-int SinkSeekP(const SinkHandle& sink_handle, const std::streampos& streampos){
+int SinkSeekP(const SinkHandle& sink_handle, const std::streampos& streampos) {
   int err = IsValidSinkHandle(sink_handle);
   if (err != kStatusbarLogSuccess) return err;
   SinkType sink_type = _sink_registry[sink_handle.idx]->type;

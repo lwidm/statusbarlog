@@ -297,6 +297,7 @@ int main() {
 This project is licensed under the Apache License, Version 2.0. See the top-level LICENSE file for details.
 
 ## TODO
+- Optionally after distroy instead of clearing print final state where the empty line goes now.
 - Let log messages and statusbars take up arbitrary streams
 - Optionally don't force flushing after every status message or every statusbarupdate
   - make it togalable using cmake
