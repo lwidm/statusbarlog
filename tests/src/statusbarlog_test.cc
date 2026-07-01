@@ -204,6 +204,24 @@ TEST_F(HandleManagementTest, CreateHandle_InvalidInputSizes) {
   }
 }
 
+TEST_F(HandleManagementTest, CreateHandle_DuplicatePositions) {
+  statusbar_log::StatusbarHandle handle;
+  std::vector<unsigned int> positions = {1, 1};
+  std::vector<unsigned int> bar_sizes = {50, 60};
+  std::vector<std::string> prefixes = {"first", "second"};
+  std::vector<std::string> postfixes = {"a", "b"};
+
+  const std::string log_filename = GetTestLogFilename();
+  int err_code = statusbar_log::test::RedirectCreateStatusbarHandle(
+      handle, this->sink_handle_, positions, bar_sizes, prefixes, postfixes,
+      log_filename);
+
+  EXPECT_EQ(err_code, -6)
+      << "Duplicate position values within a group should be rejected with -6";
+  EXPECT_FALSE(handle.valid)
+      << "Handle should remain invalid after failed creation";
+}
+
 TEST_F(HandleManagementTest, CreateHandle_MaxActiveHandlesLimit) {
   std::vector<statusbar_log::StatusbarHandle> handles;
   handles.reserve(statusbar_log::kMaxStatusbarHandles + 5);  // Pre-allocate
