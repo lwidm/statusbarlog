@@ -22,20 +22,18 @@ Example code snippet (from `docs/example/main.cc`):
    // statusbar_log::sink::CreateSinkFile(sink_handle, "output.txt");
    ```
 
-3. **Define filename for every cpp file in which you want to log**
+3. **Now a simple log message can be done like:**
    ```cpp
-   const std::string kFilename = "StatusbarLog_main.cc";
+   LogDbg(sink_handle, "Funny debug message");
+   LogInf(sink_handle, "Starting test...");
+   LogWrn(sink_handle, "Couldn't obtain viscosity. Using 1.6e-5 m^2/s");
+   LogErr(sink_handle, "Failed to compute rhs");
    ```
+   The `Log*` macros stamp the current `__FILE__` and `__LINE__` into each
+   message automatically, so no per-file filename constant is needed. They are
+   macros, so call them unqualified (not `statusbar_log::LogInf`).
 
-4. **Now a simple log message can be done like:**
-   ```cpp
-   statusbar_log::LogDbg(kFilename, sink_handle, "Funny debug message");
-   statusbar_log::LogInf(kFilename, sink_handle, "Starting test...");
-   statusbar_log::LogWrn(kFilename, sink_handle, "Couldn't obtain viscosity. Using 1.6e-5 m^2/s");
-   statusbar_log::LogErr(kFilename, sink_handle, "Failed to compute rhs");
-   ```
-
-5. **Create a stacked statusbar** (here: two bars in one group, on top of each other)
+4. **Create a stacked statusbar** (here: two bars in one group, on top of each other)
    ```cpp
    statusbar_log::StatusbarHandle handle;
    int err_code = statusbar_log::CreateStatusbarHandle(
@@ -48,16 +46,16 @@ Example code snippet (from `docs/example/main.cc`):
    The positions are ranks *within this group*, not absolute screen rows. See
    @ref layout_model_page for what that means and how multiple groups stack.
 
-6. **Updating a statusbar**
+5. **Updating a statusbar**
    ```cpp
    statusbar_log::UpdateStatusbar(handle, 0, percent);  // top bar
    statusbar_log::UpdateStatusbar(handle, 1, percent);  // lower bar
    ```
    Note: For printing the statusbar the first time just use the percentage 0.
 
-7. **Log while updating**
+6. **Log while updating**
    ```cpp
-   statusbar_log::LogInf(kFilename, sink_handle, "10 ticks reached");
+   LogInf(sink_handle, "10 ticks reached");
    ```
    The log messages are printed above any active statusbars.
 

@@ -28,8 +28,6 @@
 
 // clang-format on
 
-const std::string kFilename = "statusbarlog_main.cc";
-
 void PrintWithCleanup(const statusbar_log::sink::SinkHandle& sink_handle) {
   std::cout << "Start to be kept <- " << std::flush;
   ;
@@ -54,7 +52,7 @@ int body_statusbar(const statusbar_log::sink::SinkHandle& sink_handle,
     double percent = static_cast<double>(i) / total_steps1 * 100.0;
     statusbar_log::UpdateStatusbar(h, 0, percent);
     if (i % 10 == 0 && i != 0) {
-      statusbar_log::LogInf(kFilename, sink_handle, "10 Ticks reached");
+      LogInf(sink_handle, "10 Ticks reached");
     }
     if (i % 3 == 0 && i != 0) {
       // statusbar_log::UpdateStatusbar(h, 0, 100.1);
@@ -73,10 +71,10 @@ int body_statusbar(const statusbar_log::sink::SinkHandle& sink_handle,
 }
 
 int main_body(const statusbar_log::sink::SinkHandle& sink_handle) {
-  statusbar_log::LogInf(kFilename, sink_handle, "Starting test...");
-  statusbar_log::LogInf(kFilename, sink_handle, "Starting test...");
-  statusbar_log::LogInf(kFilename, sink_handle, "Starting test...");
-  statusbar_log::LogInf(kFilename, sink_handle, "Starting test...");
+  LogInf(sink_handle, "Starting test...");
+  LogInf(sink_handle, "Starting test...");
+  LogInf(sink_handle, "Starting test...");
+  LogInf(sink_handle, "Starting test...");
   // statusbar_log::LogInf("ExremelyLongFilenameWhichShouldBeTruncated", "Lorem
   // ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex
   // sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis
@@ -96,8 +94,7 @@ int main_body(const statusbar_log::sink::SinkHandle& sink_handle) {
       {" -- 15 total steps", "           -- 100 total steps"}  // <-- postfixes
   );
   if (err != statusbar_log::kStatusbarLogSuccess) {
-    statusbar_log::LogErr(kFilename, sink_handle,
-                          "Failed to create statusbar. Errorcode %d", err);
+    LogErr(sink_handle, "Failed to create statusbar. Errorcode %d", err);
     return err;
   }
 
@@ -105,8 +102,7 @@ int main_body(const statusbar_log::sink::SinkHandle& sink_handle) {
 
   err = statusbar_log::DestroyStatusbarHandle(h);
   if (err != statusbar_log::kStatusbarLogSuccess) {
-    statusbar_log::LogErr(kFilename, sink_handle,
-                          "Failed to destroy statusbar. Errorcode %d", err);
+    LogErr(sink_handle, "Failed to destroy statusbar. Errorcode %d", err);
     return err;
   }
 
@@ -128,7 +124,8 @@ int main() {
 
   statusbar_log::sink::SinkHandle sink_file_handle;
   statusbar_log::sink::CreateSinkFile(
-      sink_file_handle, "/home/lukas/Documents/statusbarlog/build/main_test.txt");
+      sink_file_handle,
+      "/home/lukas/Documents/statusbarlog/build/main_test.txt");
 
   err = main_body(sink_file_handle);
 

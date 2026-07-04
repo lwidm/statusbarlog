@@ -87,15 +87,17 @@ int _CaptureStdoutToFile(const std::string& filename) {
 
   _saved_stdout_fd = os_dup(os_fileno_stdout());
   if (_saved_stdout_fd == -1) {
-    std::cerr << "CaptureStdoutToFile - Error: os_dup(os_fileno_stdout()) failed: "
-              << GetErrStr() << "\n";
+    std::cerr
+        << "CaptureStdoutToFile - Error: os_dup(os_fileno_stdout()) failed: "
+        << GetErrStr() << "\n";
     os_close(fd);
     _is_capturing--;
     return -3;
   }
 
   if (os_dup2(fd, os_fileno_stdout()) == -1) {
-    std::cerr << "CaptureStdoutToFile - Error: os_dup2(fd, os_fileno_stdout()) failed: "
+    std::cerr << "CaptureStdoutToFile - Error: os_dup2(fd, os_fileno_stdout()) "
+                 "failed: "
               << GetErrStr() << "\n";
     os_close(fd);
     os_close(_saved_stdout_fd);
@@ -171,9 +173,9 @@ int _CaptureStdoutToPipe() {
 
   _saved_stdout_fd = os_dup(os_fileno_stdout());
   if (_saved_stdout_fd == -1) {
-    std::cerr
-        << "_CaptureStdoutToStringStart - Error: os_dup(os_fileno_stdout()) failed: "
-        << GetErrStr() << "\n";
+    std::cerr << "_CaptureStdoutToStringStart - Error: "
+                 "os_dup(os_fileno_stdout()) failed: "
+              << GetErrStr() << "\n";
     os_close(_saved_pipe_read_fd);
     _saved_pipe_read_fd = -1;
     os_close(write_fd);
@@ -182,7 +184,8 @@ int _CaptureStdoutToPipe() {
   }
 
   if (os_dup2(write_fd, os_fileno_stdout()) == -1) {
-    std::cerr << "CaptureStdoutToFile - Error: os_dup2(fd, os_fileno_stdout()) failed: "
+    std::cerr << "CaptureStdoutToFile - Error: os_dup2(fd, os_fileno_stdout()) "
+                 "failed: "
               << GetErrStr() << "\n";
     os_close(_saved_pipe_read_fd);
     _saved_pipe_read_fd = -1;
@@ -215,9 +218,10 @@ int _RestoreCaptureStdoutToStr(std::string& out) {
   std::cout.flush();
 
   if (os_dup2(_saved_stdout_fd, os_fileno_stdout()) == -1) {
-    std::cerr << "_RestoreCaptureStdoutToStr - Error: os_dup2(_saved_stdout_fd, "
-                 "os_fileno_stdout()) failed: "
-              << GetErrStr() << "\n";
+    std::cerr
+        << "_RestoreCaptureStdoutToStr - Error: os_dup2(_saved_stdout_fd, "
+           "os_fileno_stdout()) failed: "
+        << GetErrStr() << "\n";
     return -3;
   }
 
@@ -315,7 +319,7 @@ int RedirectToStrLog(std::string& capture_stdout,
   _CaptureStdoutToPipe();
   va_list args;
   va_start(args, fmt);
-  int err_code = LogV(log_level, filename, sink_handle, fmt, args);
+  int err_code = LogV(log_level, filename, 0, sink_handle, fmt, args);
   va_end(args);
   _RestoreCaptureStdoutToStr(capture_stdout);
   std::string capture_stdout_cleaned = StripAnsiEscapeSequences(capture_stdout);

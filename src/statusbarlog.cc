@@ -48,6 +48,10 @@
 
 // clang-format on
 
+#ifndef STATUSBARLOG_SOURCE_MARKER
+#define STATUSBARLOG_SOURCE_MARKER "statusbarlog"
+#endif
+
 const std::string kFilename = "statusbarlog.cc";
 
 namespace statusbar_log {
@@ -185,6 +189,32 @@ std::string _SanitizeString(const std::string& input) {
 }
 
 /**
+ * \brief Trim an absolute source path to a project-relative one.
+ *
+ * Returns the substring after the first STATUSBARLOG_SOURCE_MARKER directory,
+ * e.g. ".../statusbarlog/src/statusbarlog.cc" -> "src/statusbarlog.cc". Works
+ * for both path separators; if the marker is absent (e.g. a downstream
+ * consumer's file) the path is returned unchanged.
+ *
+ * \param[in] path The absolute path to be trimmed
+ *
+ * \return Returns the trimmed path
+ */
+std::string _TrimSourcePath(const std::string& path) {
+  static const std::string marker = STATUSBARLOG_SOURCE_MARKER;
+  if (marker.empty()) return path;
+  std::size_t pos = path.find(marker);
+  while (pos != std::string::npos) {
+    const std::size_t after = pos + marker.size();
+    if (after < path.size() && (path[after] == '/' || path[after] == '\\')) {
+      return path.substr(after + 1);
+    }
+    pos = path.find(marker, pos + 1);
+  }
+  return path;
+}
+
+/**
  * \brief Check if the argument is a valid statusbar handle
  *
  * This functions performs a test on a StatusbarHandle and returns
@@ -254,14 +284,14 @@ int _IsValidStatusbarHandleVerbose(const StatusbarHandle& statusbar_handle,
                                    const sink::SinkHandle& err_sink_handle) {
   const int is_valid_handle = _IsValidStatusbarHandle(statusbar_handle);
   if (is_valid_handle == -1) {
-    LogWrn(kFilename, err_sink_handle,
+    LogWrn(err_sink_handle,
            "Invalid handle: Valid flag set to false (idx: %zu, ID: %zu)",
            statusbar_handle.idx, statusbar_handle.id);
     return -1;
   }
 
   if (is_valid_handle == -2) {
-    LogWrn(kFilename, err_sink_handle,
+    LogWrn(err_sink_handle,
            "Invalid Handle: Handle index %zu out of bounds (max %zu)",
            statusbar_handle.idx, _statusbar_registry.size());
     return -2;
@@ -270,21 +300,19 @@ int _IsValidStatusbarHandleVerbose(const StatusbarHandle& statusbar_handle,
   Statusbar& target = _statusbar_registry[statusbar_handle.idx];
 
   if (is_valid_handle == -3) {
-    LogWrn(kFilename, err_sink_handle,
+    LogWrn(err_sink_handle,
            "Invalid Handle: ID mismatch: handle %u vs registry %zu",
            statusbar_handle.id, target.id);
     return -3;
   }
 
   if (is_valid_handle == -4) {
-    LogWrn(kFilename, err_sink_handle,
-           "Invalid Handle: ID is 0 (i.e. invalid)");
+    LogWrn(err_sink_handle, "Invalid Handle: ID is 0 (i.e. invalid)");
     return -4;
   }
 
   if (is_valid_handle != kStatusbarLogSuccess) {
-    LogWrn(kFilename, err_sink_handle,
-           "Invalid Handle: Errorcode not handled!");
+    LogWrn(err_sink_handle, "Invalid Handle: Errorcode not handled!");
     return -5;
   }
 
@@ -327,8 +355,7 @@ int _StatusbarComponentString(
   if (percent > 100.0 || percent < 0.0) {
     write_lock.unlock();
 
-    LogErr(kFilename, sink_handle,
-           "Failed to update statusbar: Invalid percentage.");
+    LogErr(sink_handle, "Failed to update statusbar: Invalid percentage.");
     write_lock.lock();
     return -5;
   }
@@ -627,7 +654,7 @@ void ClearCurrentLine(sink::SinkHandle sink_handle) {
 
 // TODO: files can only have statusbars that are directly next to each other
 // (The position mearly refers to ordering, not location)
-int LogV(const LogLevel log_level, const std::string& filename,
+int LogV(const LogLevel log_level, const std::string& filename, int line,
          sink::SinkHandle sink_handle, const char* fmt, va_list args) {
   if (log_level > kLogLevel) return kStatusbarLogSuccess;
   std::mutex* write_mutex_ptr = nullptr;
@@ -675,7 +702,9 @@ int LogV(const LogLevel log_level, const std::string& filename,
   va_end(args_copy);
   std::string message = _SanitizeStringWithNewline(buffer.data());
 
-  std::string sanitized_filename = _SanitizeStringWithNewline(filename);
+  std::string origin = _TrimSourcePath(filename);
+  if (line > 0) origin += ":" + std::to_string(line);
+  std::string sanitized_filename = _SanitizeStringWithNewline(origin);
   if (sanitized_filename.length() > kMaxFilenameLength) {
     sanitized_filename.resize(kMaxFilenameLength - 3);
     sanitized_filename += "...";
@@ -827,7 +856,7 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
   err = _IsValidStatusbarHandle(statusbar_handle);
   if (err == kStatusbarLogSuccess) {
     LogErr(
-        kFilename, sink_handle,
+        sink_handle,
         "Failed to create Statusbar Handle! Handle id matches already active "
         "statusbar. (_IsValidHandle returned %d)",
         err);
@@ -838,7 +867,7 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
   if (_positions.size() != _bar_sizes.size() ||
       _bar_sizes.size() != _prefixes.size() ||
       _prefixes.size() != _postfixes.size()) {
-    LogErr(kFilename, sink_handle,
+    LogErr(sink_handle,
            "Failed to create statusbar_handle The vecotors '_positions', "
            "'_bar_sizes', '_prefixes' and "
            "'_postfixes' must have the same size! Got: '_positions': %zu, "
@@ -850,7 +879,7 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
 
   if (_statusbar_registry.size() - _statusbar_free_handles.size() >=
       kMaxStatusbarHandles) {
-    LogErr(kFilename, sink_handle,
+    LogErr(sink_handle,
            "Failed to create statusbar handle. Maximum number of status bars "
            "(%zu) reached",
            kMaxStatusbarHandles);
@@ -860,7 +889,7 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
   std::mutex* write_mutex_ptr;
   err = sink::get_mutex_ptr(sink_handle, write_mutex_ptr);
   if (err != kStatusbarLogSuccess) {
-    LogErr(kFilename, sink_handle,
+    LogErr(sink_handle,
            "Failed to create statusbar_handle! Failed to get sink mutex ptr. "
            "Errorcode: %d",
            err);
@@ -870,7 +899,7 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
   for (std::size_t i = 0; i < _positions.size(); ++i) {
     for (std::size_t j = i + 1; j < _positions.size(); ++j) {
       if (_positions[i] == _positions[j]) {
-        LogErr(kFilename, sink_handle,
+        LogErr(sink_handle,
                "Failed to create statusbar_handle: position values within a "
                "group must be distinct.");
         return -6;
@@ -889,7 +918,7 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
   if (_statusbar_handle_id_count == 0) {
     write_lock.unlock();
     registry_lock.unlock();
-    LogWrn(kFilename, sink_handle,
+    LogWrn(sink_handle,
            "Max number of possible statusbar handle ids reached, looping back "
            "to 1");
     std::lock(write_lock, registry_lock);
@@ -1037,7 +1066,7 @@ int DestroyStatusbarHandle(StatusbarHandle& statusbar_handle) {
   std::mutex* write_mutex_ptr;
   err = sink::get_mutex_ptr(sink_handle, write_mutex_ptr);
   if (err != kStatusbarLogSuccess) {
-    LogErr(kFilename, sink_handle,
+    LogErr(sink_handle,
            "Failed to destory statusbar_handle! Failed to get sink mutex ptr. "
            "Errorcode: %d",
            err);
@@ -1130,7 +1159,7 @@ int UpdateStatusbar(StatusbarHandle& statusbar_handle, const std::size_t idx,
   std::mutex* write_mutex_ptr;
   err = sink::get_mutex_ptr(sink_handle, write_mutex_ptr);
   if (err != kStatusbarLogSuccess) {
-    LogErr(kFilename, sink_handle,
+    LogErr(sink_handle,
            "Failed to update statusbar! Failed to get sink mutex ptr. "
            "Errorcode: %d",
            err);
@@ -1147,16 +1176,14 @@ int UpdateStatusbar(StatusbarHandle& statusbar_handle, const std::size_t idx,
     write_lock.unlock();
     registry_lock.unlock();
     _IsValidStatusbarHandleVerbose(statusbar_handle, sink_handle);
-    LogErr(kFilename, sink_handle,
-           "Failed to update statusbar: Invalid handle.");
+    LogErr(sink_handle, "Failed to update statusbar: Invalid handle.");
     return err - 2;
   }
 
   if (percent > 100.0 || percent < 0.0) {
     write_lock.unlock();
     registry_lock.unlock();
-    LogErr(kFilename, sink_handle,
-           "Failed to update statusbar: Invalid percentage.");
+    LogErr(sink_handle, "Failed to update statusbar: Invalid percentage.");
     return -7;
   }
 
@@ -1165,8 +1192,7 @@ int UpdateStatusbar(StatusbarHandle& statusbar_handle, const std::size_t idx,
   if (idx >= statusbar.percentages.size()) {
     write_lock.unlock();
     registry_lock.unlock();
-    LogErr(kFilename, sink_handle,
-           "Failed to update statusbar: Invalid bar index.");
+    LogErr(sink_handle, "Failed to update statusbar: Invalid bar index.");
     return -8;
   }
 
@@ -1193,8 +1219,9 @@ int UpdateStatusbar(StatusbarHandle& statusbar_handle, const std::size_t idx,
     if (err != kStatusbarLogSuccess) {
       write_lock.unlock();
       registry_lock.unlock();
-      LogErr(kFilename, sink_handle,
-             "Failed to update statusbar: layout computation failed (%d).", err);
+      LogErr(sink_handle,
+             "Failed to update statusbar: layout computation failed (%d).",
+             err);
       return -9;
     }
 
@@ -1211,7 +1238,7 @@ int UpdateStatusbar(StatusbarHandle& statusbar_handle, const std::size_t idx,
     if (err != kStatusbarLogSuccess) {
       write_lock.unlock();
       registry_lock.unlock();
-      LogErr(kFilename, sink_handle,
+      LogErr(sink_handle,
              "Failed to update statusbar: layout computation failed (%d).",
              err);
       return -9;
@@ -1258,9 +1285,8 @@ int UpdateStatusbar(StatusbarHandle& statusbar_handle, const std::size_t idx,
       }
       write_lock.unlock();
       registry_lock.unlock();
-      LogErr(kFilename, sink_handle,
-             "%s on statusbar with ID %zu at bar idx %zu!", why, statusbar.id,
-             idx);
+      LogErr(sink_handle, "%s on statusbar with ID %zu at bar idx %zu!", why,
+             statusbar.id, idx);
     }
   }
 

@@ -154,7 +154,10 @@ void ClearCurrentLine(sink::SinkHandle sink_handle);
  *
  * \param[in] log_level Severity level of this message.
  * \param[in] filename Source filename or tag (will be printed in log message,
- * should be the origin of the log message).
+ * should be the origin of the log message). Trimmed at the directory name given
+ * by the `STATUSBARLOG_SOURCE_MARKER` CMake cache variable.
+ * \param[in] line Source line number appended as `filename:line`; pass a value
+ * `<= 0` to print only the filename/tag (used for tag-style origins).
  * \param[in] sink_handle Sink to write the log message to.
  * \param[in] fmt printf-style format string.
  * \param[in] args Additional format arguments.
@@ -177,7 +180,7 @@ void ClearCurrentLine(sink::SinkHandle sink_handle);
  * \see statusbar_log::kLogLevel: Macro to set the global logging threshold.
  * \see PrintErr: Function for printing error messages -> \todo
  */
-int LogV(const LogLevel log_level, const std::string& filename,
+int LogV(const LogLevel log_level, const std::string& filename, int line,
          sink::SinkHandle sink_handle, const char* fmt, va_list args);
 
 /**
@@ -187,70 +190,47 @@ int LogV(const LogLevel log_level, const std::string& filename,
  *
  * \see LogV for more detail
  */
-inline int Log(LogLevel log_level, const std::string& filename,
+inline int Log(LogLevel log_level, const std::string& filename, int line,
                sink::SinkHandle sink_handle, const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  const int err = LogV(log_level, filename, sink_handle, fmt, args);
+  const int err = LogV(log_level, filename, line, sink_handle, fmt, args);
   va_end(args);
   return err;
 }
 
 /**
- * \brief Shortcut for logging warnings.
+ * \name Source-location logging macros
  *
- *\see statusbar_log::Log: General logging function
- */
-inline int LogErr(const std::string& filename, sink::SinkHandle sink_handle,
-                  const char* fmt, ...) {
-  va_list args;
-  va_start(args, fmt);
-  const int err = LogV(kLogLevelErr, filename, sink_handle, fmt, args);
-  va_end(args);
-  return err;
-}
-
-/**
- * \brief Shortcut for logging warnings.
+ * Shortcuts for the common log levels. Each forwards to statusbar_log::Log,
+ * stamping the call site's `__FILE__` and `__LINE__` into the origin so callers
+ * no longer pass a filename by hand. Because these are macros they must be
+ * called unqualified (e.g. `LogInf(sink, ...)`, not `statusbar_log::LogInf`).
  *
- *\see statusbar_log::Log: General logging function
+ * \param[in] sink_handle Sink to write the log message to.
+ * \param[in] ... printf-style format string followed by its arguments.
+ * \return The statusbar_log::Log return code.
+ * @{
  */
-inline int LogWrn(const std::string& filename, sink::SinkHandle sink_handle,
-                  const char* fmt, ...) {
-  va_list args;
-  va_start(args, fmt);
-  const int err = LogV(kLogLevelWrn, filename, sink_handle, fmt, args);
-  va_end(args);
-  return err;
-}
-
-/**
- * \brief Shortcut for logging informational messages.
- *
- *\see statusbar_log::Log: General logging function
+/** \brief Log an error at the call site (statusbar_log::kLogLevelErr). */
+#define LogErr(sink_handle, ...)                                      \
+  statusbar_log::Log(statusbar_log::kLogLevelErr, __FILE__, __LINE__, \
+                     (sink_handle), __VA_ARGS__)
+/** \brief Log a warning at the call site (statusbar_log::kLogLevelWrn). */
+#define LogWrn(sink_handle, ...)                                      \
+  statusbar_log::Log(statusbar_log::kLogLevelWrn, __FILE__, __LINE__, \
+                     (sink_handle), __VA_ARGS__)
+/** \brief Log an informational message at the call site
+ * (statusbar_log::kLogLevelInf). */
+#define LogInf(sink_handle, ...)                                      \
+  statusbar_log::Log(statusbar_log::kLogLevelInf, __FILE__, __LINE__, \
+                     (sink_handle), __VA_ARGS__)
+/** \brief Log a debug message at the call site (statusbar_log::kLogLevelDbg).
  */
-inline int LogInf(const std::string& filename, sink::SinkHandle sink_handle,
-                  const char* fmt, ...) {
-  va_list args;
-  va_start(args, fmt);
-  const int err = LogV(kLogLevelInf, filename, sink_handle, fmt, args);
-  va_end(args);
-  return err;
-}
-
-/**
- * \brief Shortcut for logging debug messages.
- *
- *\see statusbar_log::Log: General logging function
- */
-inline int LogDbg(const std::string& filename, sink::SinkHandle sink_handle,
-                  const char* fmt, ...) {
-  va_list args;
-  va_start(args, fmt);
-  const int err = LogV(kLogLevelDbg, filename, sink_handle, fmt, args);
-  va_end(args);
-  return err;
-}
+#define LogDbg(sink_handle, ...)                                      \
+  statusbar_log::Log(statusbar_log::kLogLevelDbg, __FILE__, __LINE__, \
+                     (sink_handle), __VA_ARGS__)
+/** @} */
 
 /**
  * \brief Initializes a Statusbar, updates its handle and prints its initial
@@ -290,8 +270,8 @@ inline int LogDbg(const std::string& filename, sink::SinkHandle sink_handle,
  *
  * \warning Don't forget to destroy the statusbar_handle after use.
  *
- * \note Creating a group opens its own lines nearest the cursor and repaints the
- * whole stack; see \ref layout_model_page.
+ * \note Creating a group opens its own lines nearest the cursor and repaints
+ * the whole stack; see \ref layout_model_page.
  *
  * \see Statusbar: The statusbar struct.
  * \see _statusbar_registry: The registry for statusbar struct in use.

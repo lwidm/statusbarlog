@@ -55,7 +55,9 @@ cmake --build . --parallel
 #include "statusbarlog/statusbarlog.h"
 
 int main() {
-    statusbarlog::LogInf("main.cc", "Starting application...");
+    statusbar_log::sink::SinkHandle sink_handle;
+    statusbar_log::sink::CreateSinkStdout(sink_handle);
+    LogInf(sink_handle, "Starting application...");
 }
 @endcode
 

@@ -43,6 +43,12 @@ if(_found_index EQUAL -1)
                 "Valid values are: ${_valid_levels}")
 endif()
 
+# ----------- source path marker ---------
+# Log origins trim __FILE__ at this directory name
+set(STATUSBARLOG_SOURCE_MARKER
+    "statusbarlog"
+    CACHE STRING "Directory name at which __FILE__ is trimmed in log origins")
+
 # =============================================================================
 # Library Target
 # =============================================================================
@@ -65,6 +71,10 @@ target_include_directories(
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
          $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
          $<INSTALL_INTERFACE:include>)
+
+target_compile_definitions(
+  ${PROJECT_NAME} PRIVATE
+  STATUSBARLOG_SOURCE_MARKER="${STATUSBARLOG_SOURCE_MARKER}")
 
 message(STATUS "Detected C++ compiler: ${CMAKE_CXX_COMPILER_ID}")
 
@@ -131,6 +141,7 @@ message(STATUS "  Build Type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  Compiler: ${CMAKE_CXX_COMPILER_ID}")
 message(STATUS "  C++ Standard: 20")
 message(STATUS "  Log Level: ${STATUSBARLOG_LOG_LEVEL}")
+message(STATUS "  Source Marker: ${STATUSBARLOG_SOURCE_MARKER}")
 if(MSVC)
   message(STATUS "  MSVC flags (per-config):")
   message(STATUS "    Debug: /Zi /Od /DEBUG")
