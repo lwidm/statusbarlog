@@ -192,8 +192,10 @@ std::string _SanitizeString(const std::string& input) {
  * \brief Trim an absolute source path to a project-relative one.
  *
  * Returns the substring after the first STATUSBARLOG_SOURCE_MARKER directory,
- * e.g. ".../statusbarlog/src/statusbarlog.cc" -> "src/statusbarlog.cc". Works
- * for both path separators; if the marker is absent (e.g. a downstream
+ * e.g. ".../statusbarlog/src/statusbarlog.cc" -> "src/statusbarlog.cc". The
+ * marker must be a whole path segment (bounded by separators or the string
+ * start), so "foostatusbarlog/" and the file "statusbarlog.cc" are not matched.
+ * Works for both path separators. If the marker is absent (e.g. a downstream
  * consumer's file) the path is returned unchanged.
  *
  * \param[in] path The absolute path to be trimmed
@@ -206,9 +208,11 @@ std::string _TrimSourcePath(const std::string& path) {
   std::size_t pos = path.find(marker);
   while (pos != std::string::npos) {
     const std::size_t after = pos + marker.size();
-    if (after < path.size() && (path[after] == '/' || path[after] == '\\')) {
-      return path.substr(after + 1);
-    }
+    const bool sep_before =
+        (pos == 0) || path[pos - 1] == '/' || path[pos - 1] == '\\';
+    const bool sep_after =
+        after < path.size() && (path[after] == '/' || path[after] == '\\');
+    if (sep_before && sep_after) return path.substr(after + 1);
     pos = path.find(marker, pos + 1);
   }
   return path;

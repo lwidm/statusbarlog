@@ -819,6 +819,36 @@ TEST_F(LogTest, LogOriginTrimmedAtMarker) {
   EXPECT_STREQ(capture_stdout.c_str(),
                "INFO [/home/user/other/foo.cc]: untrimmed\n")
       << "Origin without the marker should be left unchanged";
+
+  // The marker must be a whole directory segment.
+  statusbar_log::test::RedirectToStrLog(
+      capture_stdout, this->sink_handle_, statusbar_log::kLogLevelInf,
+      "/home/user/foostatusbarlog/foo.cc", "not a segment");
+  EXPECT_STREQ(capture_stdout.c_str(),
+               "INFO [/home/user/foostatusbarlog/foo.cc]: not a segment\n")
+      << "A directory merely ending with the marker should not match";
+
+  statusbar_log::test::RedirectToStrLog(
+      capture_stdout, this->sink_handle_, statusbar_log::kLogLevelInf,
+      "/home/user/proj/statusbarlog.cc", "marker is a file");
+  EXPECT_STREQ(capture_stdout.c_str(),
+               "INFO [/home/user/proj/statusbarlog.cc]: marker is a file\n")
+      << "A file named like the marker should not match (marker is a "
+         "directory)";
+
+  statusbar_log::test::RedirectToStrLog(
+      capture_stdout, this->sink_handle_, statusbar_log::kLogLevelInf,
+      "/home/user/statusbarlog/src/statusbarlog.cc", "nested marker name");
+  EXPECT_STREQ(capture_stdout.c_str(),
+               "INFO [src/statusbarlog.cc]: nested marker name\n")
+      << "Trim at the first marker directory, keep a later marker-named file";
+
+  // Marker at the very start of the path (relative), also guards pos == 0.
+  statusbar_log::test::RedirectToStrLog(
+      capture_stdout, this->sink_handle_, statusbar_log::kLogLevelInf,
+      "statusbarlog/src/foo.cc", "leading marker");
+  EXPECT_STREQ(capture_stdout.c_str(), "INFO [src/foo.cc]: leading marker\n")
+      << "Marker at string start should be treated as a segment boundary";
 }
 
 TEST_F(LogTest, LogEmptyOriginOmitsBrackets) {
