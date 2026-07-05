@@ -46,9 +46,30 @@ constexpr unsigned int kMaxPostfixLength = 80;
 constexpr unsigned int kMaxBarWidth = 200;
 constexpr int kStatusbarLogSuccess = 0;
 
-/// Set to true to disable automatic flushing (improves performance but may
-/// delay output)
-constexpr bool kStatusbarLogNoAutoFlush = false;
+/**
+ * \brief Compile-time toggle for automatic output flushing.
+ *
+ * This value is generated at configure time by CMake's `configure_file()`
+ *
+ * Default: `false` (auto-flush enabled, unless the consumer overrides via
+ * CMake). Set to `true` to disable flushing after each log message and
+ * statusbar update, which is faster but may delay output.
+ *
+ * How to override the default (preferred):
+ *  - At CMake configure time (out-of-tree):
+ *      cmake -S . -B build -DSTATUSBARLOG_NO_AUTO_FLUSH=ON
+ *
+ *  - When used via add_subdirectory(), set the cache variable *before*
+ *    calling add_subdirectory():
+ *      set(STATUSBARLOG_NO_AUTO_FLUSH ON CACHE BOOL "statusbarlog no auto
+ * flush") add_subdirectory(path/to/statusbarlog)
+ *
+ * Allowed configure-time values:
+ *   ON, OFF
+ */
+// clang-format off
+constexpr bool kStatusbarLogNoAutoFlush = @STATUSBARLOG_NO_AUTO_FLUSH_VALUE@;
+// clang-format on
 
 /**
  * \enum LogLevel
@@ -330,6 +351,9 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
  *
  *
  * \param[in, out] statusbar_handle Struct to destroy.
+ * \param[in] keep_final_state If true, the destroyed group's bars are left
+ * painted in their final state on the freed lines above the remaining stack
+ * (terminal sinks only) instead of being cleared to blank.
  *
  * \return Returns statusbar_log::kStatusbarLogSuccess (i.e. 0) on success, or
  * one of these error/warning codes:
@@ -342,7 +366,8 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
  *         - -6: Failed to get the sink mutex pointer
  *
  * \note Destroying a group repaints the remaining stack compacted toward the
- * cursor and clears the freed lines; see \ref layout_model_page.
+ * cursor. The freed lines are then cleared, or (when keep_final_state is true)
+ * left showing the destroyed group's final bars. See \ref layout_model_page.
  *
  * \see Statusbar: The statusbar struct.
  * \see _statusbar_registry: The registry for statusbar struct in use.
@@ -350,7 +375,8 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
  * \see UpdateStatusbar: Updating a statusbar
  * \see CreateStatusbarHandle: Creating new statusbar handles.
  */
-int DestroyStatusbarHandle(StatusbarHandle& statusbar_handle);
+int DestroyStatusbarHandle(StatusbarHandle& statusbar_handle,
+                           bool keep_final_state);
 
 /**
  * \brief Function used for updating a statusbar given its handle. The statusbar

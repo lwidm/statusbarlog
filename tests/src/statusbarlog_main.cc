@@ -100,7 +100,7 @@ int main_body(const statusbar_log::sink::SinkHandle& sink_handle) {
 
   err = body_statusbar(sink_handle, h);
 
-  err = statusbar_log::DestroyStatusbarHandle(h);
+  err = statusbar_log::DestroyStatusbarHandle(h, false);
   if (err != statusbar_log::kStatusbarLogSuccess) {
     LogErr(sink_handle, "Failed to destroy statusbar. Errorcode %d", err);
     return err;

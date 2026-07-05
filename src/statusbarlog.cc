@@ -1047,7 +1047,8 @@ int CreateStatusbarHandle(StatusbarHandle& statusbar_handle,
   return kStatusbarLogSuccess;
 }
 
-int DestroyStatusbarHandle(StatusbarHandle& statusbar_handle) {
+int DestroyStatusbarHandle(StatusbarHandle& statusbar_handle,
+                           bool keep_final_state) {
   int err = _IsValidStatusbarHandle(statusbar_handle);
   if (err != kStatusbarLogSuccess) {
     std::cout
@@ -1108,12 +1109,29 @@ int DestroyStatusbarHandle(StatusbarHandle& statusbar_handle) {
             _statusbar_registry[i].postfixes[j],
             _statusbar_registry[i].spin_idxs[j], lay_offset[m]);
       }
-      // clear the lines the destroyed group's bars used to occupy
-      for (int o = static_cast<int>(total_lines) + 1;
-           o <= static_cast<int>(total_lines) + k; ++o) {
-        sink::MoveCursorUp(sink_handle, o);
-        ClearCurrentLine(sink_handle);
-        sink::MoveCursorUp(sink_handle, -o);
+      if (keep_final_state) {
+        std::vector<std::size_t> bar_order(target.positions.size());
+        for (std::size_t j = 0; j < bar_order.size(); ++j) bar_order[j] = j;
+        std::sort(bar_order.begin(), bar_order.end(),
+                  [&target](std::size_t a, std::size_t b) {
+                    return target.positions[a] < target.positions[b];
+                  });
+        for (std::size_t rank = 0; rank < bar_order.size(); ++rank) {
+          const std::size_t j = bar_order[rank];
+          const int offset =
+              static_cast<int>(total_lines) + static_cast<int>(rank) + 1;
+          _DrawStatusbarComponent(sink_handle, write_lock,
+                                  target.percentages[j], target.bar_sizes[j],
+                                  target.prefixes[j], target.postfixes[j],
+                                  target.spin_idxs[j], offset);
+        }
+      } else {
+        for (int o = static_cast<int>(total_lines) + 1;
+             o <= static_cast<int>(total_lines) + k; ++o) {
+          sink::MoveCursorUp(sink_handle, o);
+          ClearCurrentLine(sink_handle);
+          sink::MoveCursorUp(sink_handle, -o);
+        }
       }
     }
   }

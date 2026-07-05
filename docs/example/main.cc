@@ -55,8 +55,9 @@ int main() {
     }
   }
 
-  // 5. Destroy the statusbar handle when done
-  err = statusbar_log::DestroyStatusbarHandle(h);
+  // 5. Destroy the statusbar handle when done (pass true to leave the finished
+  // bars on screen instead of clearing them)
+  err = statusbar_log::DestroyStatusbarHandle(h, false);
   if (err != statusbar_log::kStatusbarLogSuccess) {
     LogErr(sink_handle, "Failed to destroy statusbar. Errorcode %d", err);
     return err;

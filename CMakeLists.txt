@@ -49,6 +49,17 @@ set(STATUSBARLOG_SOURCE_MARKER
     "statusbarlog"
     CACHE STRING "Directory name at which __FILE__ is trimmed in log origins")
 
+# ----------- auto flush ---------
+# Substituted into kStatusbarLogNoAutoFlush in statusbarlog.h.in
+option(STATUSBARLOG_NO_AUTO_FLUSH
+       "Disable automatic flushing after each log message and statusbar update"
+       OFF)
+if(STATUSBARLOG_NO_AUTO_FLUSH)
+  set(STATUSBARLOG_NO_AUTO_FLUSH_VALUE "true")
+else()
+  set(STATUSBARLOG_NO_AUTO_FLUSH_VALUE "false")
+endif()
+
 # =============================================================================
 # Library Target
 # =============================================================================
@@ -73,8 +84,8 @@ target_include_directories(
          $<INSTALL_INTERFACE:include>)
 
 target_compile_definitions(
-  ${PROJECT_NAME} PRIVATE
-  STATUSBARLOG_SOURCE_MARKER="${STATUSBARLOG_SOURCE_MARKER}")
+  ${PROJECT_NAME}
+  PRIVATE STATUSBARLOG_SOURCE_MARKER="${STATUSBARLOG_SOURCE_MARKER}")
 
 message(STATUS "Detected C++ compiler: ${CMAKE_CXX_COMPILER_ID}")
 
@@ -142,6 +153,7 @@ message(STATUS "  Compiler: ${CMAKE_CXX_COMPILER_ID}")
 message(STATUS "  C++ Standard: 20")
 message(STATUS "  Log Level: ${STATUSBARLOG_LOG_LEVEL}")
 message(STATUS "  Source Marker: ${STATUSBARLOG_SOURCE_MARKER}")
+message(STATUS "  No Auto Flush: ${STATUSBARLOG_NO_AUTO_FLUSH}")
 if(MSVC)
   message(STATUS "  MSVC flags (per-config):")
   message(STATUS "    Debug: /Zi /Od /DEBUG")

@@ -25,7 +25,6 @@ StatusbarLog is a C++ utility for simultaneous logging and multiple stacked stat
   - [Style & Formatting Guidelines](#style--formatting-guidelines)
 - [Using StatusbarLog as a CMake Module in Your Project](#using-statusbarlog-as-a-cmake-module-in-your-project)
 - [License](#license)
-- [TODO](#todo)
 
 ## Features
 
@@ -179,6 +178,7 @@ Then open the generated `.sln` in Visual Studio
 | STATUSBARLOG_BUILD_TEST_MAIN | BOOL | OFF | Build test main executable |
 | STATUSBARLOG_LOG_LEVEL | STRING | kLogLevelDbg | Compile-time log level (kLogLevelOff, kLogLevelErr, kLogLevelWrn, kLogLevelInf, kLogLevelDbg) |
 | STATUSBARLOG_SOURCE_MARKER | STRING | statusbarlog | Directory name at which `__FILE__` is trimmed in log origins |
+| STATUSBARLOG_NO_AUTO_FLUSH | BOOL | OFF | Disable auto-flush after each log message and statusbar update |
 
 Example usage:
 ```zsh
@@ -298,9 +298,3 @@ int main() {
 
 ## License
 This project is licensed under the Apache License, Version 2.0. See the top-level LICENSE file for details.
-
-## TODO
-- Optionally after distroy instead of clearing print final state where the empty line goes now.
-- Let log messages and statusbars take up arbitrary streams
-- Optionally don't force flushing after every status message or every statusbarupdate
-  - make it togalable using cmake

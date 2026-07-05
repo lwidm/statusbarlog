@@ -32,9 +32,9 @@ target_include_directories(
           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 
 target_compile_features(${PROJECT_NAME}_test PUBLIC cxx_std_20)
-target_compile_options(
-  ${PROJECT_NAME}_test PRIVATE -std=c++20
-                               $<$<CXX_COMPILER_ID:GNU>:-fno-extensions>)
+# strict ISO C++20: ISO dialect (-std=c++20, not gnu++20) + extensions are errors
+set_target_properties(${PROJECT_NAME}_test PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_options(${PROJECT_NAME}_test PRIVATE -std=c++20 -pedantic-errors)
 
 target_link_libraries(${PROJECT_NAME}_test PRIVATE ${PROJECT_NAME}
                                                    GTest::gtest_main)

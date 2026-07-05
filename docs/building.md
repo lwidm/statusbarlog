@@ -105,6 +105,7 @@ Then open the generated `.sln` in Visual Studio
 | `STATUSBARLOG_BUILD_TEST_MAIN` | BOOL | `OFF` | `ON`, `OFF` | Build test main executable |
 | `STATUSBARLOG_LOG_LEVEL` | STRING | `kLogLevelDbg` | See below | Compile-time log level threshold |
 | `STATUSBARLOG_SOURCE_MARKER` | STRING | `statusbarlog` | Any directory name | Directory name at which `__FILE__` is trimmed in log origins (e.g. `.../statusbarlog/src/foo.cc` → `src/foo.cc`) |
+| `STATUSBARLOG_NO_AUTO_FLUSH` | BOOL | `OFF` | `ON`, `OFF` | Disable automatic flushing after each log message and statusbar update (faster, but output may be delayed) |
 
 **`STATUSBARLOG_LOG_LEVEL` values** (from most to least restrictive):
 

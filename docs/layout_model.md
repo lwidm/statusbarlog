@@ -96,4 +96,6 @@ The exact behaviour of each operation:
   It opens the new group's lines nearest the cursor and redraws the whole stack.
 - @ref statusbar_log::DestroyStatusbarHandle "DestroyStatusbarHandle"
   reflows: It removes the group's lines, closes the gap, and redraws the
-  remaining stack.
+  remaining stack. The freed lines are cleared to blank, unless
+  `keep_final_state` is true, in which case the destroyed group's bars are left
+  painted there in their final state.

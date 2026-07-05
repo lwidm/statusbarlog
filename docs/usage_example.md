@@ -69,6 +69,8 @@ Example code snippet (from `docs/example/main.cc`):
 
 8. **Cleanup**
    ```cpp
-   statusbar_log::DestroyStatusbarHandle(handle);
+   statusbar_log::DestroyStatusbarHandle(handle, false);
    statusbar_log::sink::DestroySinkHandle(sink_handle);
    ```
+   Pass `true` as the second argument to leave the finished bars painted on
+   screen instead of clearing the lines they occupied.

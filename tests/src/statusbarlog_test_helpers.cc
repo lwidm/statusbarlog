@@ -287,7 +287,7 @@ int RedirectDestroyStatusbarHandle(
     statusbar_log::StatusbarHandle& statusbar_handle,
     const std::string& log_filename) {
   _CaptureStdoutToFile(log_filename);
-  int err_code = statusbar_log::DestroyStatusbarHandle(statusbar_handle);
+  int err_code = statusbar_log::DestroyStatusbarHandle(statusbar_handle, false);
   _RestoreCaptureStdout();
   return err_code;
 }
