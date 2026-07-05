@@ -69,6 +69,9 @@ int RedirectToStrLog(std::string& capture_stdout,
 
 std::string StripAnsiEscapeSequences(const std::string& s);
 
+int CaptureStdoutToPipe();
+int RestoreCaptureStdoutToStr(std::string& capture_stdout);
+
 }  // namespace test
 }  // namespace statusbar_log
 

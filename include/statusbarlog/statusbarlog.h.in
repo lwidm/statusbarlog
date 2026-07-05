@@ -155,7 +155,8 @@ void ClearCurrentLine(sink::SinkHandle sink_handle);
  * \param[in] log_level Severity level of this message.
  * \param[in] filename Source filename or tag (will be printed in log message,
  * should be the origin of the log message). Trimmed at the directory name given
- * by the `STATUSBARLOG_SOURCE_MARKER` CMake cache variable.
+ * by the `STATUSBARLOG_SOURCE_MARKER` CMake cache variable. An empty string
+ * omits the `[origin]` segment entirely (used by the `Log*Plain` macros).
  * \param[in] line Source line number appended as `filename:line`; pass a value
  * `<= 0` to print only the filename/tag (used for tag-style origins).
  * \param[in] sink_handle Sink to write the log message to.
@@ -230,6 +231,40 @@ inline int Log(LogLevel log_level, const std::string& filename, int line,
 #define LogDbg(sink_handle, ...)                                      \
   statusbar_log::Log(statusbar_log::kLogLevelDbg, __FILE__, __LINE__, \
                      (sink_handle), __VA_ARGS__)
+/** @} */
+
+/**
+ * \name Plain logging macros (no source location)
+ *
+ * Like the located macros above, but omit `__FILE__`/`__LINE__` entirely: the
+ * message reads `LEVEL: message` instead of `LEVEL [origin]: message`. They
+ * pass an empty origin to statusbar_log::Log. Call them unqualified.
+ *
+ * \param[in] sink_handle Sink to write the log message to.
+ * \param[in] ... printf-style format string followed by its arguments.
+ * \return The statusbar_log::Log return code.
+ * @{
+ */
+/** \brief Log an error with no source location (statusbar_log::kLogLevelErr).
+ */
+#define LogErrPlain(sink_handle, ...)                                   \
+  statusbar_log::Log(statusbar_log::kLogLevelErr, "", 0, (sink_handle), \
+                     __VA_ARGS__)
+/** \brief Log a warning with no source location (statusbar_log::kLogLevelWrn).
+ */
+#define LogWrnPlain(sink_handle, ...)                                   \
+  statusbar_log::Log(statusbar_log::kLogLevelWrn, "", 0, (sink_handle), \
+                     __VA_ARGS__)
+/** \brief Log an info message with no source location
+ * (statusbar_log::kLogLevelInf). */
+#define LogInfPlain(sink_handle, ...)                                   \
+  statusbar_log::Log(statusbar_log::kLogLevelInf, "", 0, (sink_handle), \
+                     __VA_ARGS__)
+/** \brief Log a debug message with no source location
+ * (statusbar_log::kLogLevelDbg). */
+#define LogDbgPlain(sink_handle, ...)                                   \
+  statusbar_log::Log(statusbar_log::kLogLevelDbg, "", 0, (sink_handle), \
+                     __VA_ARGS__)
 /** @} */
 
 /**

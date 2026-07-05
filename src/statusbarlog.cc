@@ -711,7 +711,10 @@ int LogV(const LogLevel log_level, const std::string& filename, int line,
   }
 
   std::string formatted_message =
-      std::string(prefix) + " [" + sanitized_filename + "]: " + message + "\n";
+      sanitized_filename.empty()
+          ? std::string(prefix) + ": " + message + "\n"
+          : std::string(prefix) + " [" + sanitized_filename + "]: " + message +
+                "\n";
 
   if (sink_type == sink::kSinkFileOwned) {
     std::vector<std::size_t> lay_handle_idx, lay_bar_idx;

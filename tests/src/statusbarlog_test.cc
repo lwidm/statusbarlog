@@ -703,9 +703,10 @@ TEST_F(LogTest, LogFormatStringTest) {
                "long: -1234567890, long long: 1234567890123"
                "\n");
 
-  statusbar_log::test::RedirectToStrLog(
-      capture_stdout, this->sink_handle_, statusbar_log::kLogLevelInf,
-      kFilename, "size_t: %zu, ssize_t: %zd", (size_t)42, (statusbar_log::SSIZE_T)-5);
+  statusbar_log::test::RedirectToStrLog(capture_stdout, this->sink_handle_,
+                                        statusbar_log::kLogLevelInf, kFilename,
+                                        "size_t: %zu, ssize_t: %zd", (size_t)42,
+                                        (statusbar_log::SSIZE_T)-5);
 
   EXPECT_STREQ(capture_stdout.c_str(),
                "INFO [statusbarlog_test.cc]: "
@@ -801,6 +802,72 @@ TEST_F(LogTest, LogFormatStringTest) {
                "INFO [statusbarlog_test.cc]: "
                "int:-1 u:2 sz:7 f:3.14 s:ok c:Z"
                "\n");
+}
+
+TEST_F(LogTest, LogOriginTrimmedAtMarker) {
+  std::string capture_stdout;
+
+  statusbar_log::test::RedirectToStrLog(
+      capture_stdout, this->sink_handle_, statusbar_log::kLogLevelInf,
+      "/home/user/statusbarlog/src/foo.cc", "trimmed");
+  EXPECT_STREQ(capture_stdout.c_str(), "INFO [src/foo.cc]: trimmed\n")
+      << "Origin should be trimmed at the 'statusbarlog' marker directory";
+
+  statusbar_log::test::RedirectToStrLog(capture_stdout, this->sink_handle_,
+                                        statusbar_log::kLogLevelInf,
+                                        "/home/user/other/foo.cc", "untrimmed");
+  EXPECT_STREQ(capture_stdout.c_str(),
+               "INFO [/home/user/other/foo.cc]: untrimmed\n")
+      << "Origin without the marker should be left unchanged";
+}
+
+TEST_F(LogTest, LogEmptyOriginOmitsBrackets) {
+  std::string capture_stdout;
+  statusbar_log::test::RedirectToStrLog(capture_stdout, this->sink_handle_,
+                                        statusbar_log::kLogLevelWrn, "",
+                                        "no origin here");
+  EXPECT_STREQ(capture_stdout.c_str(), "WARNING: no origin here\n");
+}
+
+TEST_F(LogTest, LogLocatedMacroAddsFileAndLine) {
+  std::string out;
+  statusbar_log::test::CaptureStdoutToPipe();
+  LogInf(this->sink_handle_, "located");
+  statusbar_log::test::RestoreCaptureStdoutToStr(out);
+  out = statusbar_log::test::StripAnsiEscapeSequences(out);
+
+  EXPECT_EQ(out.rfind("INFO [", 0), 0u) << out;
+  EXPECT_NE(out.find("]: located\n"), std::string::npos) << out;
+
+  const std::string tag = "statusbarlog_test.cc:";
+  const std::size_t pos = out.find(tag);
+  ASSERT_NE(pos, std::string::npos) << out;
+  const std::size_t digit_pos = pos + tag.size();
+  ASSERT_LT(digit_pos, out.size()) << out;
+  EXPECT_GE(out[digit_pos], '0') << out;
+  EXPECT_LE(out[digit_pos], '9') << out;
+}
+
+TEST_F(LogTest, LogPlainMacrosOmitOrigin) {
+  std::string out;
+
+  statusbar_log::test::CaptureStdoutToPipe();
+  LogInfPlain(this->sink_handle_, "plain info");
+  statusbar_log::test::RestoreCaptureStdoutToStr(out);
+  EXPECT_STREQ(statusbar_log::test::StripAnsiEscapeSequences(out).c_str(),
+               "INFO: plain info\n");
+
+  statusbar_log::test::CaptureStdoutToPipe();
+  LogWrnPlain(this->sink_handle_, "plain warn");
+  statusbar_log::test::RestoreCaptureStdoutToStr(out);
+  EXPECT_STREQ(statusbar_log::test::StripAnsiEscapeSequences(out).c_str(),
+               "WARNING: plain warn\n");
+
+  statusbar_log::test::CaptureStdoutToPipe();
+  LogErrPlain(this->sink_handle_, "plain err %d", 7);
+  statusbar_log::test::RestoreCaptureStdoutToStr(out);
+  EXPECT_STREQ(statusbar_log::test::StripAnsiEscapeSequences(out).c_str(),
+               "ERROR: plain err 7\n");
 }
 
 class ReadStatusbarUpdateTest : public StatusbarTestBase {

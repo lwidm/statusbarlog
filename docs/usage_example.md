@@ -31,7 +31,15 @@ Example code snippet (from `docs/example/main.cc`):
    ```
    The `Log*` macros stamp the current `__FILE__` and `__LINE__` into each
    message automatically, so no per-file filename constant is needed. They are
-   macros, so call them unqualified (not `statusbar_log::LogInf`).
+   macros, so call them unqualified (not `statusbar_log::LogInf`). This prints
+   e.g. `INFO [src/main.cc:42]: Starting test...`.
+
+   If you want the message *without* any source location, use the `Log*Plain`
+   variants — same signature, but they print just `INFO: Starting test...`:
+   ```cpp
+   LogInfPlain(sink_handle, "Starting test...");
+   LogErrPlain(sink_handle, "Failed to compute rhs");
+   ```
 
 4. **Create a stacked statusbar** (here: two bars in one group, on top of each other)
    ```cpp

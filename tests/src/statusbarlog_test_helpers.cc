@@ -149,7 +149,7 @@ int _RestoreCaptureStdout() {
   return 0;
 }
 
-int _CaptureStdoutToPipe() {
+int CaptureStdoutToPipe() {
   if (++_is_capturing > 1) {
     std::cerr << "_CaptureStdoutToString - Error: Already capturing stdout!\n";
     _is_capturing--;
@@ -203,14 +203,14 @@ int _CaptureStdoutToPipe() {
   return 0;
 }
 
-int _RestoreCaptureStdoutToStr(std::string& out) {
+int RestoreCaptureStdoutToStr(std::string& out) {
   if (_is_capturing == 0) {
-    std::cerr << "_RestoreCaptureStdoutToStr - Error: Not capturing stdout!\n";
+    std::cerr << "RestoreCaptureStdoutToStr - Error: Not capturing stdout!\n";
     return -1;
   }
   if (_saved_stdout_fd == -1) {
     std::cerr
-        << "_RestoreCaptureStdoutToStr - Error: Saved stdout fd invalid \n";
+        << "RestoreCaptureStdoutToStr - Error: Saved stdout fd invalid \n";
     return -2;
   }
 
@@ -218,10 +218,9 @@ int _RestoreCaptureStdoutToStr(std::string& out) {
   std::cout.flush();
 
   if (os_dup2(_saved_stdout_fd, os_fileno_stdout()) == -1) {
-    std::cerr
-        << "_RestoreCaptureStdoutToStr - Error: os_dup2(_saved_stdout_fd, "
-           "os_fileno_stdout()) failed: "
-        << GetErrStr() << "\n";
+    std::cerr << "RestoreCaptureStdoutToStr - Error: os_dup2(_saved_stdout_fd, "
+                 "os_fileno_stdout()) failed: "
+              << GetErrStr() << "\n";
     return -3;
   }
 
@@ -230,7 +229,7 @@ int _RestoreCaptureStdoutToStr(std::string& out) {
 
   if (_saved_pipe_read_fd == -1) {
     std::cout
-        << "_RestoreCaptureStdoutToStr - Warning: Nothing to read in pipe \n";
+        << "RestoreCaptureStdoutToStr - Warning: Nothing to read in pipe \n";
     out.clear();
     return 1;
   }
@@ -248,7 +247,7 @@ int _RestoreCaptureStdoutToStr(std::string& out) {
       break;
     } else {
       if (errno == EINTR) continue;
-      std::cerr << "_RestoreCaptureStdoutToStr - Error: os_read() failed: "
+      std::cerr << "RestoreCaptureStdoutToStr - Error: os_read() failed: "
                 << GetErrStr() << "\n";
       os_close(_saved_pipe_read_fd);
       _saved_pipe_read_fd = -1;
@@ -306,9 +305,9 @@ int RedirectToStrUpdateStatusbar(
     std::string& capture_stdout,
     statusbar_log::StatusbarHandle& statusbar_handle, const std::size_t idx,
     const double percent) {
-  _CaptureStdoutToPipe();
+  CaptureStdoutToPipe();
   int err_code = statusbar_log::UpdateStatusbar(statusbar_handle, idx, percent);
-  _RestoreCaptureStdoutToStr(capture_stdout);
+  RestoreCaptureStdoutToStr(capture_stdout);
   return err_code;
 }
 
@@ -316,12 +315,12 @@ int RedirectToStrLog(std::string& capture_stdout,
                      const statusbar_log::sink::SinkHandle& sink_handle,
                      LogLevel log_level, const std::string filename,
                      const char* fmt, ...) {
-  _CaptureStdoutToPipe();
+  CaptureStdoutToPipe();
   va_list args;
   va_start(args, fmt);
   int err_code = LogV(log_level, filename, 0, sink_handle, fmt, args);
   va_end(args);
-  _RestoreCaptureStdoutToStr(capture_stdout);
+  RestoreCaptureStdoutToStr(capture_stdout);
   std::string capture_stdout_cleaned = StripAnsiEscapeSequences(capture_stdout);
   capture_stdout = capture_stdout_cleaned;
   return err_code;

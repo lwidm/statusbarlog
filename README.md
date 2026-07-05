@@ -178,6 +178,7 @@ Then open the generated `.sln` in Visual Studio
 | STATUSBARLOG_BUILD_TESTS | BOOL | OFF | Build test suite |
 | STATUSBARLOG_BUILD_TEST_MAIN | BOOL | OFF | Build test main executable |
 | STATUSBARLOG_LOG_LEVEL | STRING | kLogLevelDbg | Compile-time log level (kLogLevelOff, kLogLevelErr, kLogLevelWrn, kLogLevelInf, kLogLevelDbg) |
+| STATUSBARLOG_SOURCE_MARKER | STRING | statusbarlog | Directory name at which `__FILE__` is trimmed in log origins |
 
 Example usage:
 ```zsh
